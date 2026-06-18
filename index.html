@@ -687,7 +687,7 @@ function Login({onLogin}){
           <button className="btn-main" type="submit">Sign In →</button>
         </form>
         <div style={{textAlign:"center",marginTop:14,fontSize:".72rem",color:"var(--ink3)"}}>
-          <a href="index.html" style={{color:"var(--g)",textDecoration:"none"}}>← Back to Operations Dashboard</a>
+          <a href="operations.html" style={{color:"var(--g)",textDecoration:"none"}}>← Back to Operations Dashboard</a>
         </div>
       </div>
     </div>
@@ -3108,7 +3108,7 @@ function GuestApp({session,onLogout}){
             </button>
           ))}
           <div className="snav-sect" style={{marginTop:20}}>Links</div>
-          <a href="index.html" style={{display:"block",padding:"9px 14px",color:"rgba(255,255,255,.35)",fontSize:".82rem",textDecoration:"none",borderRadius:8,transition:".15s"}} onMouseEnter={e=>e.target.style.color="rgba(255,255,255,.8)"} onMouseLeave={e=>e.target.style.color="rgba(255,255,255,.35)"}>← Operations Dashboard</a>
+          <a href="operations.html" style={{display:"block",padding:"9px 14px",color:"rgba(255,255,255,.35)",fontSize:".82rem",textDecoration:"none",borderRadius:8,transition:".15s"}} onMouseEnter={e=>e.target.style.color="rgba(255,255,255,.8)"} onMouseLeave={e=>e.target.style.color="rgba(255,255,255,.35)"}>← Operations Dashboard</a>
         </div>
         <div style={{padding:"14px 18px",borderTop:"1px solid rgba(255,255,255,.06)"}}>
           <div style={{fontSize:".7rem",color:"rgba(255,255,255,.3)",fontFamily:"var(--fm)"}}>{session.role}</div>
