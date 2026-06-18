@@ -1863,12 +1863,16 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
 
 /* ══ GMAIL SYNC PANEL ══════════════════════════════════════════ */
 const GMAIL_CLIENT_ID='824198991836-s9i9mk9n9ev4nn5eq5nvn03bi614vbmb.apps.googleusercontent.com';
+// Module-level: survive any component remount or page navigation
+let _gmailToken=null;       // cached OAuth token — persists across re-renders
+let _syncFiredThisLoad=false; // only auto-sync once per page load, no matter what
+
 function GmailSyncPanel({bookings,setBookings}){
-  const clientId=GMAIL_CLIENT_ID;
   const[lastSync,setLastSync]=useLS('seclude_gmail_last_sync',null);
   const[syncLog,setSyncLog]=useLS('seclude_gmail_sync_log',[]);
-  const[token,setToken]=useState(null);
-  const[status,setStatus]=useState('idle'); // idle|connecting|syncing|done|error
+  // token display state mirrors the module-level token so UI stays correct
+  const[hasToken,setHasToken]=useState(!!_gmailToken);
+  const[status,setStatus]=useState('idle');
   const[lastResult,setLastResult]=useState(null);
   const bookingsRef=React.useRef(bookings);
   bookingsRef.current=bookings;
@@ -1879,28 +1883,37 @@ function GmailSyncPanel({bookings,setBookings}){
       const res=await syncGmailBookings(tok,bookingsRef.current,setBookings,setSyncLog,setLastSync);
       setLastResult(res);setStatus('done');
       setTimeout(()=>setStatus('idle'),4000);
-    }catch(e){setStatus('error');console.error('Gmail sync error:',e);}
+    }catch(e){
+      // token may have expired — clear it so user can reconnect
+      if(String(e).includes('401')||String(e).includes('403')){_gmailToken=null;setHasToken(false);}
+      setStatus('error');console.error('Gmail sync error:',e);
+    }
   }
 
   function getToken(callback, silent=false){
     if(!window.google?.accounts?.oauth2){if(!silent)setStatus('error');return;}
     const client=google.accounts.oauth2.initTokenClient({
-      client_id:clientId,
+      client_id:GMAIL_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/gmail.readonly',
       callback:(r)=>{
-        if(r.access_token){setToken(r.access_token);callback(r.access_token);}
-        else if(!silent){setStatus('error');}
+        if(r.access_token){
+          _gmailToken=r.access_token; // cache at module level
+          setHasToken(true);
+          callback(r.access_token);
+        } else if(!silent){setStatus('error');}
       },
       error_callback:(e)=>{if(!silent)setStatus('error');}
     });
     client.requestAccessToken(silent?{prompt:''}:{});
   }
 
-  // ── Auto-sync once per session — skip if synced within last 30 min ──
+  // ── Auto-sync: fires at most once per page load ──
   useEffect(()=>{
-    if(!clientId)return;
-    // If already synced in the last 30 minutes, don't re-sync on every nav
-    if(lastSync&&(Date.now()-new Date(lastSync).getTime())<30*60*1000)return;
+    if(_syncFiredThisLoad)return; // already ran this page load — don't repeat on remount
+    _syncFiredThisLoad=true;
+    // Also skip if synced within the last 30 min
+    const lastSyncTime=lastSync?new Date(lastSync).getTime():0;
+    if(Date.now()-lastSyncTime<30*60*1000)return;
     let cancelled=false;
     const attempt=(retries=0)=>{
       if(cancelled)return;
@@ -1908,14 +1921,16 @@ function GmailSyncPanel({bookings,setBookings}){
         if(retries<10)setTimeout(()=>attempt(retries+1),600);
         return;
       }
-      getToken(tok=>{if(!cancelled)runSync(tok);}, /*silent=*/true);
+      // Reuse cached token if available, otherwise do silent auth
+      if(_gmailToken){runSync(_gmailToken);}
+      else{getToken(tok=>{if(!cancelled)runSync(tok);},/*silent=*/true);}
     };
     setTimeout(()=>attempt(),800);
     return()=>{cancelled=true;};
-  },[]); // run once on first mount only — eslint-disable-line
+  },[]);
 
   function handleSync(){
-    if(token){runSync(token);}
+    if(_gmailToken){runSync(_gmailToken);}
     else{setStatus('connecting');getToken(tok=>runSync(tok),false);}
   }
 
@@ -1926,7 +1941,7 @@ function GmailSyncPanel({bookings,setBookings}){
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:"1rem"}}>📧</span>
         <div>
-          <div style={{fontSize:".76rem",fontWeight:600,color:"var(--ink)"}}>Gmail Sync {token?<span style={{color:"var(--g)",fontWeight:700}}>● Connected</span>:<span style={{color:"var(--ink3)"}}>○ Not connected</span>}</div>
+          <div style={{fontSize:".76rem",fontWeight:600,color:"var(--ink)"}}>Gmail Sync {hasToken?<span style={{color:"var(--g)",fontWeight:700}}>● Connected</span>:<span style={{color:"var(--ink3)"}}>○ Not connected</span>}</div>
           <div style={{fontSize:".65rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{lastSyncFmt?`Last sync: ${lastSyncFmt}`:'Never synced'}{lastResult&&status==='done'?` · ✅ ${lastResult.added} new, ${lastResult.cancelled} cancelled`:''}</div>
         </div>
       </div>
