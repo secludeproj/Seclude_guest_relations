@@ -2176,7 +2176,10 @@ function BookingsList({bookings,session,onSelect,onAdd}){
   const[viewMode,setViewMode]=useState("smart"); // "smart" (D-layout) | "cards"
 
   // Active leads = pre-check-in only (Confirmed/Called). Checked-in → Upsell Pipeline.
-  const preCI=bookings.filter(b=>["Confirmed","Called"].includes(b.status));
+  const preCI=bookings.filter(b=>{
+    if(!["Confirmed","Called","Checked In"].includes(b.status))return false;
+    return(b.checkIn||'')>='2026-06-17'||(b.checkOut||'')>='2026-06-17';
+  });
 
   // Only show property tabs for properties that actually have bookings
   const usedProps=["All",...PROPERTIES];
