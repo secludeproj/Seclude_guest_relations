@@ -1704,24 +1704,24 @@ function htmlToText(html){
     .replace(/\n{3,}/g,'\n\n');   // max 2 blank lines
 }
 function extractPlainText(payload){
-  if(!payload)return'';
-  // Direct plain text
-  if(payload.mimeType==='text/plain'&&payload.body?.data)return decodeGmailBody(payload.body.data);
-  // Direct HTML
-  if(payload.mimeType==='text/html'&&payload.body?.data)return htmlToText(decodeGmailBody(payload.body.data));
-  let htmlFallback=null;
-  for(const part of payload.parts||[]){
-    // Recurse into message/rfc822 (forwarded emails embed the original as a sub-message)
-    if(part.mimeType==='message/rfc822'&&part.parts){
-      const found=extractPlainText({parts:part.parts});
-      if(found&&found.length>100)return found;
+  // Collect ALL text from every part of the email (including forwarded sub-messages)
+  // and concatenate — the parser just looks for keyword existence anywhere in the result
+  const chunks=[];
+  function walk(p){
+    if(!p)return;
+    if(p.mimeType==='text/plain'&&p.body?.data){chunks.push(decodeGmailBody(p.body.data));return;}
+    if(p.mimeType==='text/html'&&p.body?.data){chunks.push(htmlToText(decodeGmailBody(p.body.data)));return;}
+    // message/rfc822: forwarded email — walk its nested parts
+    if(p.mimeType==='message/rfc822'){
+      for(const sub of p.parts||[])walk(sub);
+      // also try the rfc822 payload directly (Gmail API sometimes puts it here)
+      if(p.body?.data)chunks.push(htmlToText(decodeGmailBody(p.body.data)));
+      return;
     }
-    const found=extractPlainText(part);
-    if(found&&found.length>100)return found;
-    if(!htmlFallback&&part.mimeType==='text/html'&&part.body?.data)htmlFallback=part.body.data;
+    for(const part of p.parts||[])walk(part);
   }
-  if(htmlFallback)return htmlToText(decodeGmailBody(htmlFallback));
-  return'';
+  walk(payload);
+  return chunks.join('\n');
 }
 
 function parseDjuboBooking(body, gmailMsgId, subject=''){
