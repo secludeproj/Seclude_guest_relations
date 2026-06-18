@@ -476,7 +476,7 @@ const INIT_BOOKINGS=[
     specialRequests:"",notes:"",reservationType:"Direct",
     createdBy:"Rohit Khanna",createdOn:"2026-06-10",
     cancellationPolicy:"100% charges if cancelled on or after 10-Jun-2026",
-    status:"Confirmed",upsellStatus:"Pending",callLog:[],pipelineStages:{},addedById:2,addedOn:"2026-06-10"
+    status:"Confirmed",upsellStatus:"Pending",callLog:[],pipelineStages:{},addedById:2,addedOn:"2026-06-10",_sample:true
   },
   {
     id:"bk2",reservationId:"SECW0001102",property:"Willows",
@@ -494,7 +494,7 @@ const INIT_BOOKINGS=[
     cancellationPolicy:"50% charges if cancelled before 15-Jun-2026",
     status:"Called",upsellStatus:"Pitched",
     callLog:[{id:"cl1",date:"2026-06-13",agentId:3,agentName:"Priya Sharma",pitched:["ANN","BBQ","TRN"],sold:[],outcome:"Interested",notes:"Karan loved the Anniversary package idea — wants to confirm 2 days before check-in"}],
-    pipelineStages:{details:"2026-06-12",upgrade:"2026-06-13"},addedById:3,addedOn:"2026-06-12"
+    pipelineStages:{details:"2026-06-12",upgrade:"2026-06-13"},addedById:3,addedOn:"2026-06-12",_sample:true
   },
   {
     id:"bk3",reservationId:"SECT0000988",property:"Taraview",
@@ -508,7 +508,7 @@ const INIT_BOOKINGS=[
     cancellationPolicy:"Non-refundable",
     status:"Confirmed",upsellStatus:"Sold",
     callLog:[{id:"cl2",date:"2026-06-12",agentId:2,agentName:"Rohit Khanna",pitched:["PIC","BW","SS","TRN"],sold:[{expId:"PIC",confirmedPrice:4000,expDate:"2026-06-23",notes:""},{expId:"SS",confirmedPrice:5500,expDate:"2026-06-24",notes:"Nainital + Mukteshwar"}],outcome:"Sold",notes:"Family was very enthusiastic — upsold Picnic and Sight Seeing"}],
-    pipelineStages:{details:"2026-06-11",upgrade:"2026-06-12",addons:"2026-06-12"},addedById:2,addedOn:"2026-06-11"
+    pipelineStages:{details:"2026-06-11",upgrade:"2026-06-12",addons:"2026-06-12"},addedById:2,addedOn:"2026-06-11",_sample:true
   }
 ];
 
@@ -1804,10 +1804,11 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
     if(resId)cancelled.push(resId);
   }
 
-  // Apply all changes atomically
+  // Apply all changes atomically — drop sample placeholder data on first real import
   if(added.length||cancelled.length){
     setBookings(prev=>{
-      let next=[...prev,...added];
+      const base=added.length?prev.filter(b=>!b._sample):prev;
+      let next=[...base,...added];
       if(cancelled.length)next=next.map(b=>cancelled.includes(b.reservationId)?{...b,status:'Cancelled'}:b);
       return next;
     });
