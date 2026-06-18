@@ -392,6 +392,7 @@ input,select,textarea{font-family:var(--ff);font-size:15px}
 </style>
 <script type="text/jsx" id="app-src">
 const {useState,useEffect,useMemo,useRef,useCallback}=React;
+const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||window.innerWidth<=768;
 
 /* ══ DATA ═══════════════════════════════════════════════════════ */
 const SALES_USERS=[
@@ -1550,80 +1551,78 @@ function OutreachPage({bookings,session,waTemplates,setWaTemplates,roomRates,onU
         </div>
       </div>
 
-      {/* Main stage table — desktop */}
-      <div className="desk-only" style={{borderRadius:10,border:"1px solid var(--line)",overflow:"hidden"}}>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",minWidth:680}}>
-            <thead>
-              <tr style={{background:"var(--stone)"}}>
-                <th style={{padding:"8px 12px",textAlign:"left",fontSize:".6rem",fontFamily:"var(--fm)",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--ink3)",borderBottom:"1px solid var(--line)",whiteSpace:"nowrap"}}>Guest</th>
-                <th style={{padding:"8px 10px",textAlign:"left",fontSize:".6rem",fontFamily:"var(--fm)",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--ink3)",borderBottom:"1px solid var(--line)",whiteSpace:"nowrap"}}>Check-in → Out</th>
-                {WA_STAGES.map(s=>(
-                  <th key={s.id} style={{padding:"7px 10px",textAlign:"center",fontSize:".58rem",fontFamily:"var(--fm)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--ink3)",borderBottom:"1px solid var(--line)",borderLeft:"1px solid var(--line)",whiteSpace:"nowrap",minWidth:72}}>
-                    <div>{s.icon} {s.label}</div>
-                    <div style={{fontSize:".5rem",fontWeight:400,color:"var(--ink3)",marginTop:1}}>tap to send</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length===0&&(
-                <tr><td colSpan={7} style={{padding:"28px",textAlign:"center",color:"var(--ink3)",fontSize:".84rem"}}>No leads to show · {filter!=='all'?'Try "All"':'All caught up ✓'}</td></tr>
-              )}
-              {filtered.map(b=>(
-                <tr key={b.id} style={{borderBottom:"1px solid var(--line)"}}>
-                  <td style={{padding:"8px 12px"}}>
-                    <div style={{fontWeight:600,fontSize:".82rem",whiteSpace:"nowrap"}}>{b.guestName}</div>
-                    <div style={{fontSize:".64rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{b.property}</div>
-                  </td>
-                  <td style={{padding:"8px 10px",fontSize:".72rem",fontFamily:"var(--fm)",color:"var(--ink2)",whiteSpace:"nowrap"}}>
-                    <div>{fmtDateShort(b.checkIn)}</div>
-                    <div style={{color:"var(--ink3)",fontSize:".64rem"}}>{fmtDateShort(b.checkOut)}</div>
-                  </td>
-                  {WA_STAGES.map(s=><StatusCell key={s.id} booking={b} stage={s}/>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isMobile?(
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtered.length===0&&<div style={{textAlign:"center",color:"var(--ink3)",fontSize:".84rem",padding:"24px 0"}}>No leads to show</div>}
+          {filtered.map(b=>(
+            <div key={b.id} style={{background:"#fff",border:"1px solid var(--line)",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:".9rem"}}>{b.guestName}</div>
+                  <div style={{fontSize:".7rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:1}}>{b.property}</div>
+                </div>
+                <div style={{textAlign:"right",fontSize:".72rem",fontFamily:"var(--fm)",color:"var(--ink2)"}}>
+                  <div>{fmtDateShort(b.checkIn)}</div>
+                  <div style={{color:"var(--ink3)",fontSize:".64rem"}}>{fmtDateShort(b.checkOut)}</div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                {WA_STAGES.map(s=>{
+                  const st=getWaStageStatus(b,s.id);
+                  const stColors={sent:"#D1FAE5",due:"#FEF3C7",overdue:"#FEE2E2",upcoming:"#F3F4F6",na:"#F3F4F6"};
+                  const stTextColors={sent:"#065F46",due:"#92400E",overdue:"#991B1B",upcoming:"var(--ink3)",na:"var(--ink3)"};
+                  const stLabel={sent:"Sent",due:"Due",overdue:"Late",upcoming:"Soon",na:"N/A"};
+                  return(
+                    <div key={s.id} onClick={function(){if(st!=="na"&&st!=="sent")setOpenStage({booking:b,stage:s});}}
+                      style={{background:stColors[st]||"#F3F4F6",borderRadius:7,padding:"7px 8px",textAlign:"center",cursor:st==="sent"||st==="na"?"default":"pointer"}}>
+                      <div style={{fontSize:".75rem"}}>{s.icon}</div>
+                      <div style={{fontSize:".6rem",fontWeight:700,color:stTextColors[st]||"var(--ink3)",marginTop:2}}>{s.label}</div>
+                      <div style={{fontSize:".56rem",color:stTextColors[st]||"var(--ink3)",marginTop:1}}>{stLabel[st]||st}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
-
-      {/* Mobile outreach cards */}
-      <div className="mob-only" style={{flexDirection:"column",gap:10}}>
-        {filtered.length===0&&<div style={{textAlign:"center",color:"var(--ink3)",fontSize:".84rem",padding:"24px 0"}}>No leads to show · {filter!=='all'?'Try "All"':'All caught up ✓'}</div>}
-        {filtered.map(b=>(
-          <div key={b.id} style={{background:"#fff",border:"1px solid var(--line)",borderRadius:10,padding:"12px 14px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-              <div>
-                <div style={{fontWeight:600,fontSize:".9rem"}}>{b.guestName}</div>
-                <div style={{fontSize:".7rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:1}}>{b.property}</div>
-              </div>
-              <div style={{textAlign:"right",fontSize:".72rem",fontFamily:"var(--fm)",color:"var(--ink2)"}}>
-                <div>{fmtDateShort(b.checkIn)}</div>
-                <div style={{color:"var(--ink3)",fontSize:".64rem"}}>{fmtDateShort(b.checkOut)}</div>
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-              {WA_STAGES.map(s=>{
-                const st=getWaStageStatus(b,s.id);
-                const sentDate=b.waLog?.[s.id]?.sentAt;
-                const stColors={sent:"#D1FAE5",due:"#FEF3C7",overdue:"#FEE2E2",upcoming:"#F3F4F6",na:"#F3F4F6"};
-                const stTextColors={sent:"#065F46",due:"#92400E",overdue:"#991B1B",upcoming:"var(--ink3)",na:"var(--ink3)"};
-                const stLabel={sent:"Sent",due:"Due",overdue:"Late",upcoming:"Soon",na:"N/A"};
-                return(
-                  <div key={s.id}
-                    onClick={()=>{if(st!=='na'&&st!=='sent')setOpenStage({booking:b,stage:s});}}
-                    style={{background:stColors[st]||"#F3F4F6",borderRadius:7,padding:"7px 8px",textAlign:"center",cursor:st==='sent'||st==='na'?'default':'pointer'}}>
-                    <div style={{fontSize:".75rem"}}>{s.icon}</div>
-                    <div style={{fontSize:".6rem",fontWeight:700,color:stTextColors[st]||"var(--ink3)",marginTop:2}}>{s.label}</div>
-                    <div style={{fontSize:".56rem",color:stTextColors[st]||"var(--ink3)",marginTop:1}}>{stLabel[st]||st}</div>
-                  </div>
-                );
-              })}
-            </div>
+      ):(
+        <div style={{borderRadius:10,border:"1px solid var(--line)",overflow:"hidden"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:680}}>
+              <thead>
+                <tr style={{background:"var(--stone)"}}>
+                  <th style={{padding:"8px 12px",textAlign:"left",fontSize:".6rem",fontFamily:"var(--fm)",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--ink3)",borderBottom:"1px solid var(--line)",whiteSpace:"nowrap"}}>Guest</th>
+                  <th style={{padding:"8px 10px",textAlign:"left",fontSize:".6rem",fontFamily:"var(--fm)",fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--ink3)",borderBottom:"1px solid var(--line)",whiteSpace:"nowrap"}}>Check-in / Out</th>
+                  {WA_STAGES.map(s=>(
+                    <th key={s.id} style={{padding:"7px 10px",textAlign:"center",fontSize:".58rem",fontFamily:"var(--fm)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--ink3)",borderBottom:"1px solid var(--line)",borderLeft:"1px solid var(--line)",whiteSpace:"nowrap",minWidth:72}}>
+                      <div>{s.icon} {s.label}</div>
+                      <div style={{fontSize:".5rem",fontWeight:400,color:"var(--ink3)",marginTop:1}}>tap to send</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length===0&&(
+                  <tr><td colSpan={7} style={{padding:"28px",textAlign:"center",color:"var(--ink3)",fontSize:".84rem"}}>No leads to show</td></tr>
+                )}
+                {filtered.map(b=>(
+                  <tr key={b.id} style={{borderBottom:"1px solid var(--line)"}}>
+                    <td style={{padding:"8px 12px"}}>
+                      <div style={{fontWeight:600,fontSize:".82rem",whiteSpace:"nowrap"}}>{b.guestName}</div>
+                      <div style={{fontSize:".64rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{b.property}</div>
+                    </td>
+                    <td style={{padding:"8px 10px",fontSize:".72rem",fontFamily:"var(--fm)",color:"var(--ink2)",whiteSpace:"nowrap"}}>
+                      <div>{fmtDateShort(b.checkIn)}</div>
+                      <div style={{color:"var(--ink3)",fontSize:".64rem"}}>{fmtDateShort(b.checkOut)}</div>
+                    </td>
+                    {WA_STAGES.map(s=><StatusCell key={s.id} booking={b} stage={s}/>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Stage legend */}
       <div style={{marginTop:10,display:"flex",gap:12,flexWrap:"wrap"}}>
@@ -2617,45 +2616,46 @@ function UpsellPipeline({bookings,onSelect}){
       {filtered.length===0&&<div className="empty"><strong>No upsell activity yet</strong>Log a sales call to see pipeline data.</div>}
       {filtered.length>0&&(
         <div className="card" style={{padding:0,overflow:"hidden"}}>
-          {/* Desktop table */}
-          <div className="desk-only" style={{overflowX:"auto"}}>
-            <table className="pipeline-tbl" style={{minWidth:620,width:"100%"}}>
-              <thead><tr><th>Date</th><th>Guest</th><th>Property</th><th>Check-in</th><th>Agent</th><th>Experience</th><th>Result</th><th>Revenue</th></tr></thead>
-              <tbody>
-                {filtered.map((r,i)=>(
-                  <tr key={i} style={{cursor:"pointer"}} onClick={()=>onSelect(r.bookingId)}>
-                    <td style={{fontFamily:"var(--fm)",fontSize:".76rem",whiteSpace:"nowrap"}}>{fmtDateShort(r.callDate)}</td>
-                    <td style={{fontWeight:600}}>{r.guest}</td>
-                    <td style={{color:"var(--ink3)",fontSize:".8rem"}}>{r.property}</td>
-                    <td style={{fontFamily:"var(--fm)",fontSize:".74rem",whiteSpace:"nowrap"}}>{fmtDateShort(r.checkIn)}</td>
-                    <td style={{fontSize:".8rem"}}>{r.agent}</td>
-                    <td>{r.expEmoji} {r.expName}</td>
-                    <td><span className={"sb "+(r.sold?"sb-sold":"sb-pitched")}>{r.sold?"✓ Sold":"Pitched"}</span></td>
-                    <td style={{fontFamily:"var(--fm)",fontWeight:600,color:r.sold?"var(--g)":"var(--ink3)"}}>{r.sold?fmtCur(r.confirmedPrice):"—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile card stack */}
-          <div className="mob-only" style={{flexDirection:"column",gap:0}}>
-            {filtered.map((r,i)=>(
-              <div key={i} onClick={()=>onSelect(r.bookingId)} style={{padding:"12px 14px",borderBottom:"1px solid var(--line)",cursor:"pointer",background:"#fff"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                  <div>
-                    <div style={{fontWeight:600,fontSize:".88rem"}}>{r.guest}</div>
-                    <div style={{fontSize:".72rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:1}}>{r.property}</div>
+          {isMobile?(
+            <div style={{display:"flex",flexDirection:"column"}}>
+              {filtered.map((r,i)=>(
+                <div key={i} onClick={()=>onSelect(r.bookingId)} style={{padding:"12px 14px",borderBottom:"1px solid var(--line)",cursor:"pointer",background:"#fff"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:".88rem"}}>{r.guest}</div>
+                      <div style={{fontSize:".72rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:1}}>{r.property}</div>
+                    </div>
+                    <span className={"sb "+(r.sold?"sb-sold":"sb-pitched")}>{r.sold?"Sold":"Pitched"}</span>
                   </div>
-                  <span className={"sb "+(r.sold?"sb-sold":"sb-pitched")}>{r.sold?"✓ Sold":"Pitched"}</span>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
+                    <div style={{fontSize:".76rem",color:"var(--ink2)"}}>{r.expEmoji} {r.expName}</div>
+                    <div style={{fontFamily:"var(--fm)",fontWeight:700,color:r.sold?"var(--g)":"var(--ink3)",fontSize:".82rem"}}>{r.sold?fmtCur(r.confirmedPrice):"—"}</div>
+                  </div>
+                  <div style={{fontSize:".68rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:4}}>{r.agent} · {fmtDateShort(r.callDate)}</div>
                 </div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
-                  <div style={{fontSize:".76rem",color:"var(--ink2)"}}>{r.expEmoji} {r.expName}</div>
-                  <div style={{fontFamily:"var(--fm)",fontWeight:700,color:r.sold?"var(--g)":"var(--ink3)",fontSize:".82rem"}}>{r.sold?fmtCur(r.confirmedPrice):"—"}</div>
-                </div>
-                <div style={{fontSize:".68rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:4}}>{r.agent} · {fmtDateShort(r.callDate)} · CI: {fmtDateShort(r.checkIn)}</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ):(
+            <div style={{overflowX:"auto"}}>
+              <table className="pipeline-tbl" style={{minWidth:620,width:"100%"}}>
+                <thead><tr><th>Date</th><th>Guest</th><th>Property</th><th>Check-in</th><th>Agent</th><th>Experience</th><th>Result</th><th>Revenue</th></tr></thead>
+                <tbody>
+                  {filtered.map((r,i)=>(
+                    <tr key={i} style={{cursor:"pointer"}} onClick={()=>onSelect(r.bookingId)}>
+                      <td style={{fontFamily:"var(--fm)",fontSize:".76rem",whiteSpace:"nowrap"}}>{fmtDateShort(r.callDate)}</td>
+                      <td style={{fontWeight:600}}>{r.guest}</td>
+                      <td style={{color:"var(--ink3)",fontSize:".8rem"}}>{r.property}</td>
+                      <td style={{fontFamily:"var(--fm)",fontSize:".74rem",whiteSpace:"nowrap"}}>{fmtDateShort(r.checkIn)}</td>
+                      <td style={{fontSize:".8rem"}}>{r.agent}</td>
+                      <td>{r.expEmoji} {r.expName}</td>
+                      <td><span className={"sb "+(r.sold?"sb-sold":"sb-pitched")}>{r.sold?"Sold":"Pitched"}</span></td>
+                      <td style={{fontFamily:"var(--fm)",fontWeight:600,color:r.sold?"var(--g)":"var(--ink3)"}}>{r.sold?fmtCur(r.confirmedPrice):"—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2833,8 +2833,44 @@ function Dashboard({bookings,session,onNav,setBookings,outreachOverdue=0,outreac
               {warmLeads.length>0&&<span style={{fontSize:".65rem",fontFamily:"var(--fm)",fontWeight:700,background:"var(--sm)",color:"var(--ink2)",padding:"2px 8px",borderRadius:4}}>⏰ {warmLeads.length} warm</span>}
             </div>
           </div>
-          {/* Desktop table */}
-          <div className="desk-only" style={{borderRadius:10,border:"1px solid var(--line)",overflow:"hidden"}}>
+          {isMobile?(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[...hotLeads,...warmLeads].map(({b,hs})=>{
+                const dCI=b.checkIn?Math.floor((new Date(b.checkIn+"T00:00:00")-new Date())/86400000):-1;
+                const stages=b.pipelineStages||{};
+                const done=PIPELINE_STAGES.filter(s=>stages[s.id]).length;
+                const isHot=hs.tier==="hot";
+                return(
+                  <div key={b.id} onClick={()=>onNav("bookings",b.id)} style={{background:"#fff",borderRadius:10,border:"1px solid var(--line)",borderLeft:"4px solid "+(isHot?"var(--g)":"var(--ld)"),padding:"11px 13px",cursor:"pointer"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                      <div>
+                        <div style={{fontWeight:600,fontSize:".9rem"}}>{b.guestName}</div>
+                        <div style={{fontSize:".65rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:1}}>{b.reservationId||"—"}</div>
+                      </div>
+                      <span className={"sb "+(UPSELL_CLASS[b.upsellStatus]||"sb-pending")}>{b.upsellStatus}</span>
+                    </div>
+                    <div style={{fontSize:".78rem",color:"var(--ink2)",marginBottom:5}}>{b.property}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontFamily:"var(--fm)",fontSize:".75rem"}}>{fmtDateShort(b.checkIn)}</div>
+                        <div style={{fontSize:".65rem",fontFamily:"var(--fm)",fontWeight:700,color:dCI<=2&&dCI>=0?"var(--g)":dCI<=7&&dCI>=0?"var(--ink2)":"var(--ink3)"}}>
+                          {dCI===0?"Today":dCI===1?"Tomorrow":dCI>=0?(dCI+"d away"):"—"}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                        <div style={{display:"flex",gap:3,flexWrap:"wrap",justifyContent:"flex-end"}}>{hs.reasons.slice(0,2).map((r,i)=><span key={i} className={"reason-tag "+r.cls}>{r.t}</span>)}</div>
+                        <div style={{display:"flex",gap:2,alignItems:"center"}}>
+                          {PIPELINE_STAGES.map(s=><div key={s.id} style={{width:8,height:8,borderRadius:"50%",background:stages[s.id]?"var(--g)":"var(--line)"}}/>)}
+                          <span style={{fontSize:".6rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginLeft:2}}>{done}/5</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ):(
+            <div style={{borderRadius:10,border:"1px solid var(--line)",overflow:"hidden"}}>
             <table className="priority-tbl" style={{minWidth:560,width:"100%"}}>
               <thead><tr>
                 <th className="priority-stripe"></th>
@@ -2873,44 +2909,8 @@ function Dashboard({bookings,session,onNav,setBookings,outreachOverdue=0,outreac
                 })}
               </tbody>
             </table>
-          </div>
-          {/* Mobile card stack */}
-          <div className="mob-only" style={{flexDirection:"column",gap:8}}>
-            {[...hotLeads,...warmLeads].map(({b,hs})=>{
-              const dCI=b.checkIn?Math.floor((new Date(b.checkIn+"T00:00:00")-new Date())/86400000):-1;
-              const stages=b.pipelineStages||{};
-              const done=PIPELINE_STAGES.filter(s=>stages[s.id]).length;
-              const isHot=hs.tier==="hot";
-              return(
-                <div key={b.id} onClick={()=>onNav("bookings",b.id)} style={{background:"#fff",borderRadius:10,border:"1px solid var(--line)",borderLeft:`4px solid ${isHot?"var(--g)":"var(--ld)"}`,padding:"11px 13px",cursor:"pointer"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                    <div>
-                      <div style={{fontWeight:600,fontSize:".9rem"}}>{b.guestName}</div>
-                      <div style={{fontSize:".65rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:1}}>{b.reservationId||"—"}</div>
-                    </div>
-                    <span className={"sb "+(UPSELL_CLASS[b.upsellStatus]||"sb-pending")}>{b.upsellStatus}</span>
-                  </div>
-                  <div style={{fontSize:".78rem",color:"var(--ink2)",marginBottom:5}}>{b.property}</div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontFamily:"var(--fm)",fontSize:".75rem"}}>{fmtDateShort(b.checkIn)}</div>
-                      <div style={{fontSize:".65rem",fontFamily:"var(--fm)",fontWeight:700,color:dCI<=2&&dCI>=0?"var(--g)":dCI<=7&&dCI>=0?"var(--ink2)":"var(--ink3)"}}>
-                        {dCI===0?"Today":dCI===1?"Tomorrow":dCI>=0?`${dCI}d away`:"—"}
-                      </div>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                      <div style={{display:"flex",gap:3,flexWrap:"wrap",justifyContent:"flex-end"}}>{hs.reasons.slice(0,2).map((r,i)=><span key={i} className={"reason-tag "+r.cls}>{r.t}</span>)}</div>
-                      <div style={{display:"flex",gap:2,alignItems:"center"}}>
-                        {PIPELINE_STAGES.map(s=><div key={s.id} style={{width:8,height:8,borderRadius:"50%",background:stages[s.id]?"var(--g)":"var(--line)"}}/>)}
-                        <span style={{fontSize:".6rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginLeft:2}}>{done}/5</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+            </div>
+          )}
       )}
 
       {hotLeads.length===0&&warmLeads.length===0&&(
