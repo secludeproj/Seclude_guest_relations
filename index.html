@@ -1816,7 +1816,7 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   const existingIds=new Set(existingBookings.map(b=>b.reservationId));
 
   // 1. New bookings — search by subject to catch both direct AND forwarded emails
-  const q=encodeURIComponent('subject:"Reservation Confirmation" after:2025/01/01');
+  const q=encodeURIComponent('subject:"Reservation Confirmation" after:2026/06/17');
   console.log('[GmailSync] query:',decodeURIComponent(q));
   const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=500`);
   console.log('[GmailSync] messages found:',list.messages?.length||0);
@@ -1834,7 +1834,7 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   }
 
   // 2. Cancellations — also by subject to catch forwarded cancellation emails
-  const qc=encodeURIComponent('subject:"Reservation Cancellation" after:2025/01/01');
+  const qc=encodeURIComponent('subject:"Reservation Cancellation" after:2026/06/17');
   const listC=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${qc}&maxResults=200`);
   for(const msg of listC.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
