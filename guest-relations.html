@@ -1658,6 +1658,18 @@ function decodeGmailBody(data){
   catch{try{return atob(data.replace(/-/g,'+').replace(/_/g,'/'));}catch{return'';}}
 }
 
+function htmlToText(html){
+  return html
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<\/p>/gi,'\n').replace(/<\/div>/gi,'\n')
+    .replace(/<\/tr>/gi,'\n').replace(/<\/td>/gi,' ').replace(/<\/th>/gi,' ')
+    .replace(/<[^>]+>/g,'')
+    .replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'")
+    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+    .replace(/[ \t]+/g,' ')
+    .replace(/\n[ \t]+/g,'\n')
+    .replace(/\n{3,}/g,'\n\n');
+}
 function extractPlainText(payload){
   if(!payload)return'';
   if(payload.mimeType==='text/plain'&&payload.body?.data)return decodeGmailBody(payload.body.data);
@@ -1667,24 +1679,22 @@ function extractPlainText(payload){
     if(found)return found;
     if(!htmlFallback&&part.mimeType==='text/html'&&part.body?.data)htmlFallback=part.body.data;
   }
-  if(htmlFallback){
-    const h=decodeGmailBody(htmlFallback);
-    return h.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/\s+/g,' ');
-  }
-  if(payload.mimeType==='text/html'&&payload.body?.data){
-    const h=decodeGmailBody(payload.body.data);
-    return h.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/\s+/g,' ');
-  }
+  if(htmlFallback)return htmlToText(decodeGmailBody(htmlFallback));
+  if(payload.mimeType==='text/html'&&payload.body?.data)return htmlToText(decodeGmailBody(payload.body.data));
   return'';
 }
 
 function parseDjuboBooking(body, gmailMsgId){
-  if(!body.includes('Powered by Djubo.com'))return null;
-  const resId=body.match(/Reservation ID[\s\S]{0,10}\n\s*([A-Z]+\d+)/)?.[1]?.trim();
-  if(!resId)return null;
+  if(!/djubo/i.test(body))return null;
+  const resId=(
+    body.match(/Reservation ID[\s\S]{0,10}\n\s*([A-Z]+\d+)/)?.[1]||
+    body.match(/Reservation ID\s*[:\-]?\s*([A-Z]+\d+)/i)?.[1]||
+    body.match(/\b(SEC[A-Z]\d{4,})\b/)?.[1]
+  )?.trim();
+  if(!resId){console.warn('[Djubo] no resId in msg',gmailMsgId,body.slice(0,300));return null;}
   const prefix=resId.match(/^([A-Z]+)/)?.[1];
   const property=PROP_FROM_PREFIX[prefix];
-  if(!property)return null;
+  if(!property){console.warn('[Djubo] unknown prefix',prefix,'resId',resId);return null;}
 
   const ciStr=body.match(/Check in[\s\S]{0,10}\n\s*([\d]+ \w+,? \d{4}[^\n]+)/)?.[1]?.trim();
   const coStr=body.match(/Check out[\s\S]{0,10}\n\s*([\d]+ \w+,? \d{4}[^\n]+)/)?.[1]?.trim();
@@ -1767,12 +1777,16 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   const added=[], cancelled=[], skipped=[];
   const existingIds=new Set(existingBookings.map(b=>b.reservationId));
 
-  // 1. New bookings — search all Djubo confirmation emails from Jan 2025 onwards
-  const q=encodeURIComponent('from:djubo.com subject:Reservation after:2025/01/01');
+  // 1. New bookings — search all Djubo emails from Jan 2025 onwards
+  const q=encodeURIComponent('from:djubo.com after:2025/01/01');
+  console.log('[GmailSync] query:',decodeURIComponent(q));
   const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=200`);
+  console.log('[GmailSync] messages found:',list.messages?.length||0);
   for(const msg of list.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
+    const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
     const body=extractPlainText(full.payload);
+    console.log('[GmailSync] email subject:',subject,'bodyLen:',body.length,'hasDjubo:',/djubo/i.test(body));
     const parsed=parseDjuboBooking(body, msg.id);
     if(!parsed){skipped.push(msg.id);continue;}
     if(existingIds.has(parsed.reservationId)){skipped.push(parsed.reservationId);continue;}
