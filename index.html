@@ -1661,9 +1661,20 @@ function decodeGmailBody(data){
 function extractPlainText(payload){
   if(!payload)return'';
   if(payload.mimeType==='text/plain'&&payload.body?.data)return decodeGmailBody(payload.body.data);
+  let htmlFallback=null;
   for(const part of payload.parts||[]){
     const found=extractPlainText(part);
     if(found)return found;
+    if(!htmlFallback&&part.mimeType==='text/html'&&part.body?.data)htmlFallback=part.body.data;
+  }
+  // fallback: strip HTML tags so parser can still read the email
+  if(htmlFallback){
+    const h=decodeGmailBody(htmlFallback);
+    return h.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/\s+/g,' ');
+  }
+  if(payload.mimeType==='text/html'&&payload.body?.data){
+    const h=decodeGmailBody(payload.body.data);
+    return h.replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/\s+/g,' ');
   }
   return'';
 }
@@ -1757,9 +1768,9 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   const added=[], cancelled=[], skipped=[];
   const existingIds=new Set(existingBookings.map(b=>b.reservationId));
 
-  // 1. New bookings
-  const q=encodeURIComponent('from:djubo.com subject:"Reservation Confirmation" after:2026/06/17');
-  const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=50`);
+  // 1. New bookings — search all Djubo confirmation emails from Jan 2025 onwards
+  const q=encodeURIComponent('from:djubo.com subject:Reservation after:2025/01/01');
+  const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=200`);
   for(const msg of list.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
     const body=extractPlainText(full.payload);
@@ -1771,7 +1782,7 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   }
 
   // 2. Cancellations
-  const qc=encodeURIComponent('from:djubo.com subject:"Cancel" after:2026/06/17');
+  const qc=encodeURIComponent('from:djubo.com subject:Cancel after:2025/01/01');
   const listC=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${qc}&maxResults=50`);
   for(const msg of listC.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
@@ -2781,7 +2792,6 @@ function Dashboard({bookings,session,onNav,setBookings,outreachOverdue=0,outreac
         </div>
       </div>
 
-      <GmailSyncPanel bookings={bookings} setBookings={setBookings}/>
 
       {(outreachOverdue>0||outreachDue>0)&&(
         <div onClick={()=>onNav("outreach")} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",
@@ -3158,6 +3168,8 @@ function GuestApp({session,onLogout}){
           </div>
         </div>
         <div id="content">
+          {/* Gmail sync always mounted so auto-sync fires on every app load */}
+          <div style={{display:page==="dashboard"?"block":"none"}}><GmailSyncPanel bookings={bookings} setBookings={setBookings}/></div>
           {showForm&&<AddBookingForm session={session} initial={editBooking||null} onSave={saveBooking} onCancel={()=>{setAddMode(false);setEditBooking(null);}}/>}
           {!showForm&&page==="dashboard"&&<Dashboard bookings={bookings} session={session} onNav={nav} setBookings={setBookings} outreachOverdue={outreachOverdue} outreachDue={outreachDue}/>}
           {!showForm&&page==="bookings"&&!selId&&<BookingsList bookings={bookings} session={session} onSelect={id=>{setSelId(id);}} onAdd={()=>{setAddMode(true);setSelId(null);}}/>}
