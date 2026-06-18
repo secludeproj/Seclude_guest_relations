@@ -1904,9 +1904,11 @@ function BookingDetail({booking,session,onBack,onEdit,onUpdateBooking,roomRates}
   const[copied,setCopied]=useState(null);
   const{experiences,flags}=getUpsellSuggestions(booking);
 
-  function copyWA(exp){
-    copyToClipboard(generateWAMsg(booking,exp));
-    setCopied(exp.id);setTimeout(()=>setCopied(null),2500);
+  function sendWA(exp){
+    const msg=generateWAMsg(booking,exp);
+    const url=buildWaUrl(booking.guestPhone,msg);
+    if(url){window.open(url,'_blank','noopener,noreferrer');}
+    else{copyToClipboard(msg);setCopied(exp.id);setTimeout(()=>setCopied(null),2500);}
   }
 
   function saveCall(entry,newUpsellStatus){
@@ -2102,8 +2104,8 @@ function BookingDetail({booking,session,onBack,onEdit,onUpdateBooking,roomRates}
               </div>
               <div className="exp-row-desc">{exp.shortDesc}</div>
               <div className="exp-row-actions">
-                <button className="btn-wa" style={{fontSize:".7rem",padding:"4px 9px"}} onClick={()=>copyWA(exp)}>
-                  {copied===exp.id?"✓ Copied":"WhatsApp"}
+                <button className="btn-wa" style={{fontSize:".7rem",padding:"4px 9px"}} onClick={()=>sendWA(exp)}>
+                  {copied===exp.id?"✓ Copied":booking.guestPhone?"💬 Send":"Copy Msg"}
                 </button>
                 <button className="btn btn-out btn-sm" style={{fontSize:".7rem",padding:"4px 9px"}} onClick={()=>setShowExp(exp)}>Details</button>
               </div>
