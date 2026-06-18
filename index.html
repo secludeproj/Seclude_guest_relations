@@ -1703,25 +1703,26 @@ function htmlToText(html){
     .replace(/\n[ \t]+/g,'\n')    // trim leading space on each line
     .replace(/\n{3,}/g,'\n\n');   // max 2 blank lines
 }
+// Returns {text, rfc822AttachmentIds[]} — caller must fetch attachments separately
 function extractPlainText(payload){
-  // Collect ALL text from every part of the email (including forwarded sub-messages)
-  // and concatenate — the parser just looks for keyword existence anywhere in the result
   const chunks=[];
+  const rfc822Ids=[];
   function walk(p){
     if(!p)return;
-    if(p.mimeType==='text/plain'&&p.body?.data){chunks.push(decodeGmailBody(p.body.data));return;}
-    if(p.mimeType==='text/html'&&p.body?.data){chunks.push(htmlToText(decodeGmailBody(p.body.data)));return;}
-    // message/rfc822: forwarded email — walk its nested parts
-    if(p.mimeType==='message/rfc822'){
+    const mt=p.mimeType||'';
+    if(mt==='text/plain'&&p.body?.data){chunks.push(decodeGmailBody(p.body.data));return;}
+    if(mt==='text/html'&&p.body?.data){chunks.push(htmlToText(decodeGmailBody(p.body.data)));return;}
+    if(mt==='message/rfc822'){
+      // Inline nested parts (some clients)
       for(const sub of p.parts||[])walk(sub);
-      // also try the rfc822 payload directly (Gmail API sometimes puts it here)
-      if(p.body?.data)chunks.push(htmlToText(decodeGmailBody(p.body.data)));
+      // Stored as attachment (most Gmail forwards) — queue for extra fetch
+      if(p.body?.attachmentId)rfc822Ids.push(p.body.attachmentId);
       return;
     }
     for(const part of p.parts||[])walk(part);
   }
   walk(payload);
-  return chunks.join('\n');
+  return{text:chunks.join('\n'),rfc822Ids};
 }
 
 function parseDjuboBooking(body, gmailMsgId, subject=''){
@@ -1757,18 +1758,19 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
   }
   if(!property)console.warn('[Djubo] no property extracted',resId,'subj:',subject);
 
-  // Field extraction — just look for keyword presence, grab the value in the next ~60 chars
-  const grab=(re)=>body.match(re)?.[1]?.replace(/[\r\n]/g,' ').trim()||'';
-  const ciStr=grab(/Check\s*[:-]?\s*in[\s\S]{0,60}?(\d{1,2}\s+\w{3,9}[\s,]+\d{4}[^\n\r]*)/i);
-  const coStr=grab(/Check\s*[:-]?\s*out[\s\S]{0,60}?(\d{1,2}\s+\w{3,9}[\s,]+\d{4}[^\n\r]*)/i);
-  const guestName=grab(/Guest\s*Name[\s\S]{0,10}?:\s*([^\n\r:]{2,60})/i);
-  const guestEmail=grab(/Guest\s*Email[\s\S]{0,10}?:\s*([^\s\n\r]{3,80})/i);
-  const guestPhone=grab(/Guest\s*Contact[\s\S]{0,20}?:\s*([^\n\r]{3,30})/i);
-  const createdBy=grab(/Created\s*By[\s\S]{0,5}?:\s*([^\n\r]{2,60})/i);
-  const createdOnStr=grab(/Created\s*On[\s\S]{0,5}?:\s*([^\n\r]{2,40})/i);
-  const resType=grab(/Type\s*of\s*Reservation[\s\S]{0,5}?:\s*([^\n\r]{2,40})/i)||'Direct';
-  const cancelPolicy=grab(/Cancellation\s*Policy[\s\S]{0,30}?:\s*([^\n\r]{2,120})/i);
-  const paymentSummary=grab(/Payment\s*Summary[\s\S]{0,30}?:\s*([^\n\r]{2,120})/i);
+  // Minimal anchors — keyword presence only, grab whatever follows within a window
+  const grab=(re)=>body.match(re)?.[1]?.replace(/[\r\n\t]+/g,' ').trim()||'';
+  const anyDate=/\d{1,2}\s+\w{3,9}[\s,]+\d{4}[^\n\r]*/;
+  const ciStr=grab(new RegExp('Check.{0,4}in[\\s\\S]{0,80}?('+anyDate.source+')','i'));
+  const coStr=grab(new RegExp('Check.{0,4}out[\\s\\S]{0,80}?('+anyDate.source+')','i'));
+  const guestName=grab(/Guest.{0,5}Name.{0,15}:\s*([^\n\r:]{2,60})/i);
+  const guestEmail=grab(/Guest.{0,5}Email.{0,15}:\s*([^\s\n\r]{3,80})/i);
+  const guestPhone=grab(/Guest.{0,10}Contact.{0,20}:\s*([^\n\r]{3,30})/i);
+  const createdBy=grab(/Created.{0,4}By.{0,10}:\s*([^\n\r]{2,60})/i);
+  const createdOnStr=grab(/Created.{0,4}On.{0,10}:\s*([^\n\r]{2,40})/i);
+  const resType=grab(/Type.{0,5}Reservation.{0,10}:\s*([^\n\r]{2,40})/i)||'Direct';
+  const cancelPolicy=grab(/Cancell.{0,20}:\s*([^\n\r]{2,120})/i);
+  const paymentSummary=grab(/Payment.{0,20}:\s*([^\n\r]{2,120})/i);
 
   // Parse rooms from table
   const rooms=[];
@@ -1854,13 +1856,35 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   for(const msg of list.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
     const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
-    const body=extractPlainText(full.payload);
-    console.log('[GmailSync] subject:',subject,'bodyLen:',body.length);
+    let {text:body, rfc822Ids}=extractPlainText(full.payload);
+    // Forwarded emails: original Djubo email stored as message/rfc822 attachment — fetch it
+    for(const attId of rfc822Ids){
+      try{
+        const att=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}/attachments/${attId}`);
+        if(att.data){
+          // rfc822 attachment data is the raw RFC2822 email — extract readable text from it
+          const raw=decodeGmailBody(att.data);
+          // grab any base64-encoded HTML block inside the raw message
+          const htmlBlock=raw.match(/Content-Type:\s*text\/html[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
+          if(htmlBlock){body+='\n'+htmlToText(decodeGmailBody(htmlBlock.replace(/\s/g,'')));}
+          else body+='\n'+raw.replace(/<[^>]+>/g,' ');
+        }
+      }catch(e){console.warn('[GmailSync] attachment fetch failed',attId,e);}
+    }
+    console.log('[GmailSync] subject:',subject,'bodyLen:',body.length,'rfc822s:',rfc822Ids.length);
     const parsed=parseDjuboBooking(body, msg.id, subject);
     if(!parsed){skipped.push(subject||msg.id);continue;}
-    if(existingIds.has(parsed.reservationId)){skipped.push(parsed.reservationId);continue;}
-    console.log('[GmailSync] ✅ parsed:',parsed.reservationId,parsed.guestName,parsed.property);
-    added.push(parsed);
+    // Update existing booking if it has no dates (was stored incomplete from a previous sync)
+    const existing=existingBookings.find(b=>b.reservationId===parsed.reservationId);
+    if(existing&&existing.checkIn){skipped.push(parsed.reservationId);continue;}
+    if(existing&&!existing.checkIn){
+      // Replace incomplete record
+      added.push({...existing,...parsed});
+      console.log('[GmailSync] 🔄 updated incomplete:',parsed.reservationId);
+    }else{
+      added.push(parsed);
+      console.log('[GmailSync] ✅ parsed:',parsed.reservationId,parsed.guestName,parsed.property);
+    }
     existingIds.add(parsed.reservationId);
   }
 
@@ -1878,9 +1902,10 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   // Apply all changes atomically — drop sample placeholder data on first real import
   if(added.length||cancelled.length){
     setBookings(prev=>{
-      // If we imported real bookings, purge any sample placeholders first
       const base=added.length?prev.filter(b=>!b._sample):prev;
-      let next=[...base,...added];
+      // Replace any updated incomplete records, append new ones
+      const updatedIds=new Set(added.filter(a=>base.some(b=>b.reservationId===a.reservationId)).map(a=>a.reservationId));
+      let next=[...base.filter(b=>!updatedIds.has(b.reservationId)),...added];
       if(cancelled.length)next=next.map(b=>cancelled.includes(b.reservationId)?{...b,status:'Cancelled'}:b);
       return next;
     });
