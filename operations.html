@@ -239,7 +239,7 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
   .photo-cell{min-width:38px;padding:2px}
   .photo-thumb,.photo-add{width:28px;height:28px}
   /* room-hd min-width matches 2 sub-cols (condition+qty) when photo is hidden */
-  .xl-tbl .room-hd{min-width:144px;font-size:.65rem;padding:5px 4px}
+  .xl-tbl .room-hd{min-width:104px;font-size:.62rem;padding:4px 3px}
   .xl-tbl .sub-hd{font-size:.57rem;padding:4px 2px}
   .qty-inp{font-size:.72rem}
   .dmg-cell{min-width:80px;font-size:.68rem;padding:5px 2px}
@@ -550,16 +550,16 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
           </tr>}
           {isRoom&&<tr>
             {rooms.map(r=><React.Fragment key={r}>
-              <th className="sub-hd" style={{minWidth:86}}>Condition</th>
-              <th className="sub-hd" style={{minWidth:62}}>Qty</th>
-              {!isMobile&&<th className="sub-hd" style={{minWidth:52}}>Photo</th>}
+              <th className="sub-hd" style={{minWidth:62}}>Condition</th>
+              <th className="sub-hd" style={{minWidth:40}}>Qty</th>
+              {!isMobile&&<th className="sub-hd" style={{minWidth:36}}>Photo</th>}
             </React.Fragment>)}
           </tr>}
           {!isRoom&&<tr>
             <th className="item-col-head">Item</th>
-            <th className="prop-hd" style={{minWidth:90}}>Condition</th>
-            <th className="prop-hd" style={{minWidth:70}}>Quantity</th>
-            <th className="prop-hd" style={{minWidth:52}}>Photo</th>
+            <th className="prop-hd" style={{minWidth:62}}>Condition</th>
+            <th className="prop-hd" style={{minWidth:40}}>Quantity</th>
+            <th className="prop-hd" style={{minWidth:36}}>Photo</th>
           </tr>}
         </thead>
         <tbody>
@@ -1263,7 +1263,7 @@ function HQReports({proc,exp}){
           <button className="btn btn-dk" style={{fontSize:".75rem",padding:"5px 12px"}} onClick={()=>dlCSV(rptProc.map(mkPRow),PCOLS,"purchases_"+(rptProp==="All"?"all":rptProp.replace(/ /g,"_"))+".csv")}>⬇ CSV</button>
         </div>
         <div style={{overflowX:"auto"}}>
-          <table className="ltbl" style={{minWidth:600}}>
+          <table className="ltbl">
             <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Total (₹)</th><th>Vendor</th><th>Property</th><th>Category</th><th>Invoice</th></tr></thead>
             <tbody>
               {rptProc.length===0?<tr><td colSpan={8} style={{textAlign:"center",padding:24,color:"var(--ink3)"}}>No purchases</td></tr>
@@ -1289,7 +1289,7 @@ function HQReports({proc,exp}){
           <button className="btn btn-dk" style={{fontSize:".75rem",padding:"5px 12px",background:"#b91c1c"}} onClick={()=>dlCSV(rptExp.map(mkERow),ECOLS,"expenses_"+(rptProp==="All"?"all":rptProp.replace(/ /g,"_"))+".csv")}>⬇ CSV</button>
         </div>
         <div style={{overflowX:"auto"}}>
-          <table className="ltbl" style={{minWidth:560}}>
+          <table className="ltbl">
             <thead><tr><th>Date</th><th>Item</th><th>Price (₹)</th><th>Vendor</th><th>Property</th><th>Dept</th><th>Invoice</th></tr></thead>
             <tbody>
               {rptExp.length===0?<tr><td colSpan={7} style={{textAlign:"center",padding:24,color:"var(--ink3)"}}>No expenses</td></tr>
