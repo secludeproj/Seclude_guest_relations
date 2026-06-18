@@ -2964,7 +2964,7 @@ function Dashboard({bookings,session,onNav,setBookings,outreachOverdue=0,outreac
 }
 
 /* ══ BOTTOM NAV ══════════════════════════════════════════════ */
-function BottomNav({page,nav,pendingCount,outreachBadge,outreachRed}){
+function BottomNav({page,nav,pendingCount,outreachBadge,outreachRed,onLogout}){
   const items=[
     {id:"dashboard",  label:"Home",      icon:"⌂"},
     {id:"bookings",   label:"Leads",     icon:"☰",badge:pendingCount||null},
@@ -2982,6 +2982,10 @@ function BottomNav({page,nav,pendingCount,outreachBadge,outreachRed}){
             {it.label}
           </button>
         ))}
+        <button className="bn-item" onClick={onLogout} style={{color:"#ef4444"}}>
+          <span style={{fontSize:".9rem"}}>⏻</span>
+          Sign out
+        </button>
       </div>
     </nav>
   );
@@ -3187,7 +3191,7 @@ function GuestApp({session,onLogout}){
           {!showForm&&page==="reports"&&<Reports bookings={bookings}/>}
           {!showForm&&page==="pricing"&&<PricingSettings expPrices={expPrices} setExpPrices={setExpPrices} roomRates={roomRates} setRoomRates={setRoomRates}/>}
         </div>
-        <BottomNav page={page} nav={nav} pendingCount={pendingCount} outreachBadge={(outreachOverdue+outreachDue)||null} outreachRed={outreachOverdue>0}/>
+        <BottomNav page={page} nav={nav} pendingCount={pendingCount} outreachBadge={(outreachOverdue+outreachDue)||null} outreachRed={outreachOverdue>0} onLogout={onLogout}/>
       </div>
     </div>
   );
@@ -3195,9 +3199,20 @@ function GuestApp({session,onLogout}){
 
 /* ══ ROOT ════════════════════════════════════════════════════ */
 function App(){
-  const[session,setSession]=useState(null);
-  if(!session)return<Login onLogin={setSession}/>;
-  return<GuestApp session={session} onLogout={()=>setSession(null)}/>;
+  const[session,setSession]=useState(()=>{
+    try{const s=localStorage.getItem('seclude_session');return s?JSON.parse(s):null;}
+    catch{return null;}
+  });
+  function handleLogin(u){
+    localStorage.setItem('seclude_session',JSON.stringify(u));
+    setSession(u);
+  }
+  function handleLogout(){
+    localStorage.removeItem('seclude_session');
+    setSession(null);
+  }
+  if(!session)return<Login onLogin={handleLogin}/>;
+  return<GuestApp session={session} onLogout={handleLogout}/>;
 }
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
