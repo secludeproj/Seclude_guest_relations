@@ -1807,15 +1807,14 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
 }
 
 /* ══ GMAIL SYNC PANEL ══════════════════════════════════════════ */
+const GMAIL_CLIENT_ID='824198991836-s9i9mk9n9ev4nn5eq5nvn03bi614vbmb.apps.googleusercontent.com';
 function GmailSyncPanel({bookings,setBookings}){
-  const[clientId,setClientId]=useLS('seclude_gmail_client_id','');
+  const clientId=GMAIL_CLIENT_ID;
   const[lastSync,setLastSync]=useLS('seclude_gmail_last_sync',null);
   const[syncLog,setSyncLog]=useLS('seclude_gmail_sync_log',[]);
   const[token,setToken]=useState(null);
   const[status,setStatus]=useState('idle'); // idle|connecting|syncing|done|error
   const[lastResult,setLastResult]=useState(null);
-  const[showSetup,setShowSetup]=useState(false);
-  const[draft,setDraft]=useState(clientId);
   const bookingsRef=React.useRef(bookings);
   bookingsRef.current=bookings;
 
@@ -1867,57 +1866,8 @@ function GmailSyncPanel({bookings,setBookings}){
 
   const lastSyncFmt=lastSync?new Date(lastSync).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+' · '+new Date(lastSync).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):null;
 
-  if(!clientId){
-    return(
-      <div style={{background:"var(--gxl)",border:"1px dashed var(--gl)",borderRadius:10,padding:"10px 14px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-        <div style={{fontSize:".8rem",color:"var(--ink2)"}}>📧 <strong>Gmail Auto-Sync not set up</strong> <span style={{color:"var(--ink3)",fontSize:".74rem"}}>— Connect your @seclude.in inbox to auto-import Djubo bookings</span></div>
-        <button onClick={()=>setShowSetup(true)} style={{padding:"5px 12px",background:"var(--g)",color:"#fff",border:"none",borderRadius:7,fontSize:".76rem",fontWeight:600,cursor:"pointer",flexShrink:0}}>Setup Gmail →</button>
-        {showSetup&&(
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
-            <div style={{background:"#fff",borderRadius:14,padding:28,width:440,maxWidth:"92vw",boxShadow:"0 8px 40px rgba(0,0,0,.18)"}}>
-              <div style={{fontFamily:"var(--fh)",fontSize:"1.1rem",fontWeight:700,marginBottom:4}}>Connect Gmail Sync</div>
-              <div style={{fontSize:".8rem",color:"var(--ink2)",marginBottom:18,lineHeight:1.5}}>This lets the dashboard automatically import bookings from Djubo emails in your @seclude.in inbox. One-time setup, then it runs silently every time you open the dashboard.</div>
-              <div style={{background:"var(--stone)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:".76rem",lineHeight:1.7,color:"var(--ink2)"}}>
-                <strong style={{display:"block",marginBottom:4}}>Steps to get your Client ID:</strong>
-                1. Go to <strong>console.cloud.google.com</strong><br/>
-                2. Create project → <strong>Seclude Dashboard</strong><br/>
-                3. APIs & Services → Enable <strong>Gmail API</strong><br/>
-                4. Credentials → Create → <strong>OAuth 2.0 Client ID</strong> → Web Application<br/>
-                5. Add <strong>http://localhost:3000</strong> to Authorized JavaScript origins<br/>
-                6. Copy the Client ID and paste below
-              </div>
-              <input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Paste Google OAuth Client ID here…" style={{width:"100%",padding:"8px 11px",border:"1.5px solid var(--line)",borderRadius:7,fontSize:".8rem",marginBottom:12,boxSizing:"border-box"}}/>
-              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                <button onClick={()=>setShowSetup(false)} style={{padding:"6px 14px",border:"1.5px solid var(--line)",borderRadius:7,background:"#fff",cursor:"pointer",fontSize:".8rem"}}>Cancel</button>
-                <button onClick={()=>{if(draft.trim()){setClientId(draft.trim());setShowSetup(false);}}} style={{padding:"6px 16px",background:"var(--g)",color:"#fff",border:"none",borderRadius:7,fontWeight:600,cursor:"pointer",fontSize:".8rem"}}>Save & Connect</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return(
     <div className="gmail-strip" style={{background:"var(--stone)",border:"1px solid var(--line)",borderRadius:10,padding:"9px 14px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-      {/* Switch account modal */}
-      {showSetup&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
-          <div style={{background:"#fff",borderRadius:14,padding:28,width:440,maxWidth:"92vw",boxShadow:"0 8px 40px rgba(0,0,0,.18)"}}>
-            <div style={{fontFamily:"var(--fh)",fontSize:"1.1rem",fontWeight:700,marginBottom:4}}>Switch Gmail Account</div>
-            <div style={{fontSize:".8rem",color:"var(--ink2)",marginBottom:14,lineHeight:1.5}}>Enter the OAuth Client ID for the new Gmail account you want to sync. The previous account will be disconnected.</div>
-            <div style={{background:"var(--stone)",borderRadius:8,padding:"10px 12px",marginBottom:14,fontSize:".74rem",lineHeight:1.7,color:"var(--ink2)"}}>
-              Make sure to add the <strong>new domain/origin</strong> to your Google Cloud OAuth client's Authorized JavaScript Origins.
-            </div>
-            <input value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Paste new Google OAuth Client ID…" style={{width:"100%",padding:"8px 11px",border:"1.5px solid var(--line)",borderRadius:7,fontSize:".8rem",marginBottom:12,boxSizing:"border-box"}}/>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <button onClick={()=>setShowSetup(false)} style={{padding:"6px 14px",border:"1.5px solid var(--line)",borderRadius:7,background:"#fff",cursor:"pointer",fontSize:".8rem"}}>Cancel</button>
-              <button onClick={()=>{if(draft.trim()){setClientId(draft.trim());setToken(null);setLastSync(null);setSyncLog([]);setShowSetup(false);}}}
-                style={{padding:"6px 16px",background:"var(--g)",color:"#fff",border:"none",borderRadius:7,fontWeight:600,cursor:"pointer",fontSize:".8rem"}}>Switch & Reconnect</button>
-            </div>
-          </div>
-        </div>
-      )}
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:"1rem"}}>📧</span>
         <div>
@@ -1925,14 +1875,10 @@ function GmailSyncPanel({bookings,setBookings}){
           <div style={{fontSize:".65rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{lastSyncFmt?`Last sync: ${lastSyncFmt}`:'Never synced'}{lastResult&&status==='done'?` · ✅ ${lastResult.added} new, ${lastResult.cancelled} cancelled`:''}</div>
         </div>
       </div>
-      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-        <button onClick={handleSync} disabled={status==='syncing'||status==='connecting'}
-          style={{padding:"5px 13px",background:status==='syncing'||status==='connecting'?"var(--line)":"var(--g)",color:status==='syncing'||status==='connecting'?"var(--ink3)":"#fff",border:"none",borderRadius:7,fontSize:".76rem",fontWeight:600,cursor:status==='syncing'?"wait":"pointer",transition:".15s"}}>
-          {status==='connecting'?'Connecting…':status==='syncing'?'Syncing…':status==='done'?'✓ Synced':'↻ Sync Now'}
-        </button>
-        <button onClick={()=>{setDraft('');setShowSetup(true);}} style={{padding:"4px 10px",border:"1px solid var(--line)",borderRadius:6,background:"#fff",cursor:"pointer",fontSize:".68rem",color:"var(--ink2)",fontWeight:500}}>⇄ Switch Account</button>
-        <button onClick={()=>{if(window.confirm('Disconnect Gmail sync?')){setClientId('');setToken(null);setLastSync(null);}}} style={{padding:"4px 8px",border:"1px solid var(--line)",borderRadius:6,background:"#fff",cursor:"pointer",fontSize:".65rem",color:"var(--ink3)"}}>✕</button>
-      </div>
+      <button onClick={handleSync} disabled={status==='syncing'||status==='connecting'}
+        style={{padding:"5px 13px",background:status==='syncing'||status==='connecting'?"var(--line)":"var(--g)",color:status==='syncing'||status==='connecting'?"var(--ink3)":"#fff",border:"none",borderRadius:7,fontSize:".76rem",fontWeight:600,cursor:status==='syncing'?"wait":"pointer",transition:".15s",flexShrink:0}}>
+        {status==='connecting'?'Connecting…':status==='syncing'?'Syncing…':status==='done'?'✓ Synced':'↻ Sync Now'}
+      </button>
     </div>
   );
 }
