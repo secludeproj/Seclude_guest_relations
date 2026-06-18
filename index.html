@@ -1863,19 +1863,19 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
 
 /* ══ GMAIL SYNC PANEL ══════════════════════════════════════════ */
 const GMAIL_CLIENT_ID='824198991836-s9i9mk9n9ev4nn5eq5nvn03bi614vbmb.apps.googleusercontent.com';
-// Module-level: survive any component remount or page navigation
-let _gmailToken=null;       // cached OAuth token — persists across re-renders
-let _syncFiredThisLoad=false; // only auto-sync once per page load, no matter what
+const SYNC_COOLDOWN_MS=5*60*1000; // 5 minutes between auto-syncs
+let _gmailToken=null; // module-level token — survives re-renders/remounts
 
-function GmailSyncPanel({bookings,setBookings}){
+function GmailSyncPanel({bookings,setBookings,isVisible}){
   const[lastSync,setLastSync]=useLS('seclude_gmail_last_sync',null);
   const[syncLog,setSyncLog]=useLS('seclude_gmail_sync_log',[]);
-  // token display state mirrors the module-level token so UI stays correct
   const[hasToken,setHasToken]=useState(!!_gmailToken);
   const[status,setStatus]=useState('idle');
   const[lastResult,setLastResult]=useState(null);
   const bookingsRef=React.useRef(bookings);
   bookingsRef.current=bookings;
+  const statusRef=React.useRef(status);
+  statusRef.current=status;
 
   async function runSync(tok){
     setStatus('syncing');
@@ -1884,7 +1884,6 @@ function GmailSyncPanel({bookings,setBookings}){
       setLastResult(res);setStatus('done');
       setTimeout(()=>setStatus('idle'),4000);
     }catch(e){
-      // token may have expired — clear it so user can reconnect
       if(String(e).includes('401')||String(e).includes('403')){_gmailToken=null;setHasToken(false);}
       setStatus('error');console.error('Gmail sync error:',e);
     }
@@ -1896,24 +1895,19 @@ function GmailSyncPanel({bookings,setBookings}){
       client_id:GMAIL_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/gmail.readonly',
       callback:(r)=>{
-        if(r.access_token){
-          _gmailToken=r.access_token; // cache at module level
-          setHasToken(true);
-          callback(r.access_token);
-        } else if(!silent){setStatus('error');}
+        if(r.access_token){_gmailToken=r.access_token;setHasToken(true);callback(r.access_token);}
+        else if(!silent){setStatus('error');}
       },
       error_callback:(e)=>{if(!silent)setStatus('error');}
     });
     client.requestAccessToken(silent?{prompt:''}:{});
   }
 
-  // ── Auto-sync: fires at most once per page load ──
-  useEffect(()=>{
-    if(_syncFiredThisLoad)return; // already ran this page load — don't repeat on remount
-    _syncFiredThisLoad=true;
-    // Also skip if synced within the last 30 min
+  function attemptAutoSync(){
+    // Skip if already syncing or if synced within cooldown window
+    if(statusRef.current==='syncing'||statusRef.current==='connecting')return;
     const lastSyncTime=lastSync?new Date(lastSync).getTime():0;
-    if(Date.now()-lastSyncTime<30*60*1000)return;
+    if(Date.now()-lastSyncTime<SYNC_COOLDOWN_MS)return;
     let cancelled=false;
     const attempt=(retries=0)=>{
       if(cancelled)return;
@@ -1921,13 +1915,25 @@ function GmailSyncPanel({bookings,setBookings}){
         if(retries<10)setTimeout(()=>attempt(retries+1),600);
         return;
       }
-      // Reuse cached token if available, otherwise do silent auth
       if(_gmailToken){runSync(_gmailToken);}
       else{getToken(tok=>{if(!cancelled)runSync(tok);},/*silent=*/true);}
     };
-    setTimeout(()=>attempt(),800);
+    attempt();
     return()=>{cancelled=true;};
+  }
+
+  // ── Auto-sync on first mount (page load) ──
+  useEffect(()=>{
+    const cleanup=attemptAutoSync();
+    return cleanup;
   },[]);
+
+  // ── Auto-sync every time dashboard becomes visible ──
+  useEffect(()=>{
+    if(!isVisible)return;
+    const cleanup=attemptAutoSync();
+    return cleanup;
+  },[isVisible]);
 
   function handleSync(){
     if(_gmailToken){runSync(_gmailToken);}
@@ -3195,7 +3201,7 @@ function GuestApp({session,onLogout}){
         </div>
         <div id="content">
           {/* Gmail sync always mounted so auto-sync fires on every app load */}
-          <div style={{display:page==="dashboard"?"block":"none"}}><GmailSyncPanel bookings={bookings} setBookings={setBookings}/></div>
+          <div style={{display:page==="dashboard"?"block":"none"}}><GmailSyncPanel bookings={bookings} setBookings={setBookings} isVisible={page==="dashboard"}/></div>
           {showForm&&<AddBookingForm session={session} initial={editBooking||null} onSave={saveBooking} onCancel={()=>{setAddMode(false);setEditBooking(null);}}/>}
           {!showForm&&page==="dashboard"&&<Dashboard bookings={bookings} session={session} onNav={nav} setBookings={setBookings} outreachOverdue={outreachOverdue} outreachDue={outreachDue}/>}
           {!showForm&&page==="bookings"&&!selId&&<BookingsList bookings={bookings} session={session} onSelect={id=>{setSelId(id);}} onAdd={()=>{setAddMode(true);setSelId(null);}}/>}
