@@ -1726,56 +1726,39 @@ function extractPlainText(payload){
 }
 
 function parseDjuboBooking(body, gmailMsgId, subject=''){
-  // Must have "Reservation Confirmation" in subject (Gmail query already filters this; body sender doesn't matter)
   if(!/Reservation\s+Confirmation/i.test(subject))return null;
 
-  // ── ResId: last dash-separated segment of subject is always the reservation ID ──
-  // e.g. "Fwd: Reservation Confirmation - Seclude Palampur - PAL0003010"
-  //      "Reservation Confirmation - Seclude Pangot, Perch - SECP0001829"
+  // ResId — last dash-segment of subject (works for Fwd: too)
   const subjParts=subject.split(/\s*[-–]\s*/);
-  const resId=(
-    subjParts[subjParts.length-1]?.match(/([A-Z]{2,}\d{4,})/)?.[1]||
-    body.match(/Reservation ID[\s\S]{0,15}\n\s*([A-Z]{2,}\d{4,})/)?.[1]||
-    body.match(/Reservation ID\s*[:\-]?\s*([A-Z]{2,}\d{4,})/i)?.[1]
-  )?.trim();
-  if(!resId){console.warn('[Djubo] no resId',gmailMsgId,'subj:',subject);return null;}
+  const resId=subjParts[subjParts.length-1]?.match(/([A-Z]{2,}\d{4,})/)?.[1]?.trim()
+    ||body.match(/([A-Z]{2,}\d{4,})/)?.[1]?.trim();
+  if(!resId)return null;
 
-  // ── Property: middle segment of subject, strip "Seclude " prefix ──
-  // Don't validate against a hard list — accept whatever Djubo sends
-  let property='';
-  if(subjParts.length>=3){
-    // Remove "Fwd:" or "Re:" prefix from first segment if forwarded
-    const midStart=subjParts.findIndex(p=>/Reservation\s+Confirmation/i.test(p));
-    const mid=subjParts[midStart+1]||'';
-    property=mid.replace(/^Seclude\s*/i,'').trim();
-  }
-  if(!property){
-    // Fallback: try DJUBO_NAME_MAP or PROP_FROM_PREFIX
-    property=propFromSubject(subject)||(()=>{
-      const prefix=resId.match(/^([A-Z]+)/)?.[1];
-      return PROP_FROM_PREFIX[prefix]||'';
-    })();
-  }
-  if(!property)console.warn('[Djubo] no property extracted',resId,'subj:',subject);
+  // Property — middle subject segment, strip "Seclude " prefix
+  const midStart=subjParts.findIndex(p=>/Reservation\s+Confirmation/i.test(p));
+  const property=(subjParts[midStart+1]||'').replace(/^Seclude\s*/i,'').trim()
+    ||(()=>{const px=resId.match(/^([A-Z]+)/)?.[1];return PROP_FROM_PREFIX[px]||'';})();
 
-  // Minimal anchors — keyword presence only, grab whatever follows within a window
+  // The 4 fields that matter — keyword exists anywhere, grab what follows
   const grab=(re)=>body.match(re)?.[1]?.replace(/[\r\n\t]+/g,' ').trim()||'';
-  const anyDate=/\d{1,2}\s+\w{3,9}[\s,]+\d{4}[^\n\r]*/;
-  const ciStr=grab(new RegExp('Check.{0,4}in[\\s\\S]{0,80}?('+anyDate.source+')','i'));
-  const coStr=grab(new RegExp('Check.{0,4}out[\\s\\S]{0,80}?('+anyDate.source+')','i'));
+  const D=/\d{1,2}\s+\w{3}[\s,]+\d{4}[^\n\r]*/; // date pattern
+  const ciStr =grab(new RegExp('Check.{0,5}in[\\s\\S]{0,80}?('+D.source+')','i'));
+  const coStr =grab(new RegExp('Check.{0,5}out[\\s\\S]{0,80}?('+D.source+')','i'));
   const guestName=grab(/Guest.{0,5}Name.{0,15}:\s*([^\n\r:]{2,60})/i);
+
+  console.log('[Djubo]',resId,'ci:',ciStr,'co:',coStr,'guest:',guestName,'bodyLen:',body.length);
+
+  // Optional extras — parsed if present, empty if not
   const guestEmail=grab(/Guest.{0,5}Email.{0,15}:\s*([^\s\n\r]{3,80})/i);
   const guestPhone=grab(/Guest.{0,10}Contact.{0,20}:\s*([^\n\r]{3,30})/i);
   const createdBy=grab(/Created.{0,4}By.{0,10}:\s*([^\n\r]{2,60})/i);
   const createdOnStr=grab(/Created.{0,4}On.{0,10}:\s*([^\n\r]{2,40})/i);
   const resType=grab(/Type.{0,5}Reservation.{0,10}:\s*([^\n\r]{2,40})/i)||'Direct';
-  const cancelPolicy=grab(/Cancell.{0,20}:\s*([^\n\r]{2,120})/i);
-  const paymentSummary=grab(/Payment.{0,20}:\s*([^\n\r]{2,120})/i);
 
-  // Parse rooms from table
+  // Rooms — best-effort from table; fall back to one blank room
   const rooms=[];
   const lines=body.split('\n');
-  const tblIdx=lines.findIndex(l=>l.includes('S.No.')&&l.includes('Room')&&l.includes('Nights'));
+  const tblIdx=lines.findIndex(l=>l.includes('S.No.')&&l.includes('Room'));
   if(tblIdx>=0){
     for(let i=tblIdx+1;i<lines.length;i++){
       const line=lines[i].trim();
@@ -1790,17 +1773,14 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
       const bp=before.split(/\s+/);
       const price=after.match(/INR\s*([\d,]+\.?\d*)/)?.[1];
       const nums=bp.slice(-4);
-      const roomName=bp.slice(0,-4).join(' ')||rest.split(/\s+/)[0];
-      rooms.push({
-        roomName,nights:parseInt(nums[0])||1,adults:parseInt(nums[1])||2,
+      rooms.push({roomName:bp.slice(0,-4).join(' ')||rest.split(/\s+/)[0],
+        nights:parseInt(nums[0])||1,adults:parseInt(nums[1])||2,
         children:parseInt(nums[2])||0,infants:parseInt(nums[3])||0,
-        mealPlan,netPrice:price?parseFloat(price.replace(/,/g,'')):0
-      });
+        mealPlan,netPrice:price?parseFloat(price.replace(/,/g,'')):0});
     }
   }
   if(!rooms.length)rooms.push({roomName:'',nights:1,adults:2,children:0,infants:0,mealPlan:'Room Only',netPrice:0});
 
-  // Parse financials
   const fin=(re)=>{const m=body.match(re);return m?parseFloat(m[1].replace(/,/g,'')):0;};
   const financials={
     roomRent:fin(/Room\s*Rent[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i),
@@ -1813,13 +1793,11 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
 
   const creator=SALES_USERS.find(u=>u.name===createdBy);
   return{
-    id:'djubo_'+resId,
-    reservationId:resId,property,guestName,guestEmail,guestPhone,
+    id:'djubo_'+resId,reservationId:resId,property,guestName,guestEmail,guestPhone,
     checkIn:djuboDateToISO(ciStr),checkInTime:djuboTime(ciStr),
     checkOut:djuboDateToISO(coStr),checkOutTime:djuboTime(coStr)||'11:00',
     reservationType:resType,status:'Confirmed',upsellStatus:'Pending',
     rooms,financials,callLog:[],pipelineStages:{},
-    cancellationPolicy:cancelPolicy,paymentSummary,
     createdBy,addedById:creator?.id||null,
     addedOn:djuboDateToISO(createdOnStr)||todayISO(),
     source:'gmail',gmailMsgId
