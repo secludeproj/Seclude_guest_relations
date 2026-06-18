@@ -349,6 +349,9 @@ input,select,textarea{font-family:var(--ff);font-size:15px}
   /* ── Forms ── */
   .fg,.fg.t3,.fg.t4{grid-template-columns:1fr}
   .detail-grid{grid-template-columns:1fr}
+  .detail-section{padding:12px 14px;margin-bottom:8px}
+  .detail-section-title{margin-bottom:8px}
+  .dl,.dl.t3{grid-template-columns:1fr 1fr}
   .modal-box{padding:16px;margin:8px}
   .back-btn{width:100%;justify-content:center;margin-bottom:8px}
 
@@ -1606,17 +1609,17 @@ function OutreachPage({bookings,session,waTemplates,setWaTemplates,roomRates,onU
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
               {WA_STAGES.map(s=>{
                 const st=getWaStageStatus(b,s.id);
-                const sentDate=b.waLog?.[s.id]?.sentAt;
+                const ss=st.status;
                 const stColors={sent:"#D1FAE5",due:"#FEF3C7",overdue:"#FEE2E2",upcoming:"#F3F4F6",na:"#F3F4F6"};
                 const stTextColors={sent:"#065F46",due:"#92400E",overdue:"#991B1B",upcoming:"var(--ink3)",na:"var(--ink3)"};
                 const stLabel={sent:"Sent",due:"Due",overdue:"Late",upcoming:"Soon",na:"N/A"};
                 return(
                   <div key={s.id}
-                    onClick={()=>{if(st!=='na'&&st!=='sent')setOpenStage({booking:b,stage:s});}}
-                    style={{background:stColors[st]||"#F3F4F6",borderRadius:7,padding:"7px 8px",textAlign:"center",cursor:st==='sent'||st==='na'?'default':'pointer'}}>
+                    onClick={()=>{if(ss!=='na'&&ss!=='sent')setSendModal({booking:b,stageId:s.id});}}
+                    style={{background:stColors[ss]||"#F3F4F6",borderRadius:7,padding:"7px 8px",textAlign:"center",cursor:ss==='sent'||ss==='na'?'default':'pointer'}}>
                     <div style={{fontSize:".75rem"}}>{s.icon}</div>
-                    <div style={{fontSize:".6rem",fontWeight:700,color:stTextColors[st]||"var(--ink3)",marginTop:2}}>{s.label}</div>
-                    <div style={{fontSize:".56rem",color:stTextColors[st]||"var(--ink3)",marginTop:1}}>{stLabel[st]||st}</div>
+                    <div style={{fontSize:".6rem",fontWeight:700,color:stTextColors[ss]||"var(--ink3)",marginTop:2}}>{s.label}</div>
+                    <div style={{fontSize:".56rem",color:stTextColors[ss]||"var(--ink3)",marginTop:1}}>{stLabel[ss]||ss}</div>
                   </div>
                 );
               })}
@@ -1962,21 +1965,19 @@ function BookingDetail({booking,session,onBack,onEdit,onUpdateBooking,roomRates}
     {showExp&&<ExpDetailModal exp={showExp} booking={booking} onClose={()=>setShowExp(null)}/>}
     <button className="back-btn" onClick={onBack}>← Back to Bookings</button>
 
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:14}}>
-      <div>
-        <div style={{fontFamily:"var(--fh)",fontSize:"1.5rem",fontWeight:600}}>{booking.guestName}</div>
-        <div style={{fontSize:".76rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginTop:2}}>{booking.reservationId} · {booking.property} · Added by {booking.addedById?SALES_USERS.find(u=>u.id===booking.addedById)?.name||"—":booking.createdBy}</div>
-      </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        <select value={booking.status} onChange={e=>updateStatus("status",e.target.value)} style={{border:"1.5px solid var(--line)",borderRadius:7,padding:"5px 9px",fontSize:".78rem",cursor:"pointer",background:"var(--white)"}}>
+    <div style={{marginBottom:12}}>
+      <div style={{fontFamily:"var(--fh)",fontSize:isMobile?"1.15rem":"1.5rem",fontWeight:600,marginBottom:2}}>{booking.guestName}</div>
+      <div style={{fontSize:".72rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginBottom:8}}>{booking.reservationId} · {booking.property} · Added by {booking.addedById?SALES_USERS.find(u=>u.id===booking.addedById)?.name||"—":booking.createdBy}</div>
+      <div style={{display:"flex",gap:6,alignItems:"center",overflowX:isMobile?"auto":"visible",flexWrap:isMobile?"nowrap":"wrap",WebkitOverflowScrolling:"touch",paddingBottom:isMobile?4:0}}>
+        <select value={booking.status} onChange={e=>updateStatus("status",e.target.value)} style={{border:"1.5px solid var(--line)",borderRadius:7,padding:"5px 9px",fontSize:".75rem",cursor:"pointer",background:"var(--white)",flexShrink:0}}>
           {BOOKING_STATUSES.map(s=><option key={s}>{s}</option>)}
         </select>
-        <select value={booking.upsellStatus} onChange={e=>updateStatus("upsellStatus",e.target.value)} style={{border:"1.5px solid var(--line)",borderRadius:7,padding:"5px 9px",fontSize:".78rem",cursor:"pointer",background:"var(--white)"}}>
+        <select value={booking.upsellStatus} onChange={e=>updateStatus("upsellStatus",e.target.value)} style={{border:"1.5px solid var(--line)",borderRadius:7,padding:"5px 9px",fontSize:".75rem",cursor:"pointer",background:"var(--white)",flexShrink:0}}>
           {UPSELL_STATUSES.map(s=><option key={s}>{s}</option>)}
         </select>
-        <WAButton booking={booking} templateType="details" label="WhatsApp" style={{fontSize:".76rem",padding:"5px 11px"}}/>
-        <button className="btn btn-out btn-sm" onClick={onEdit}>✏ Edit</button>
-        <button className="btn btn-g btn-sm" onClick={()=>setShowLogCall(true)}>📞 Log Call</button>
+        <WAButton booking={booking} templateType="details" label="WhatsApp" style={{fontSize:".73rem",padding:"5px 10px",flexShrink:0}}/>
+        <button className="btn btn-out btn-sm" onClick={onEdit} style={{flexShrink:0}}>✏ Edit</button>
+        <button className="btn btn-g btn-sm" onClick={()=>setShowLogCall(true)} style={{flexShrink:0}}>📞 Log Call</button>
       </div>
     </div>
 
