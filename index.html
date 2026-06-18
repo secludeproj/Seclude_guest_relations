@@ -1705,15 +1705,22 @@ function htmlToText(html){
 }
 function extractPlainText(payload){
   if(!payload)return'';
+  // Direct plain text
   if(payload.mimeType==='text/plain'&&payload.body?.data)return decodeGmailBody(payload.body.data);
+  // Direct HTML
+  if(payload.mimeType==='text/html'&&payload.body?.data)return htmlToText(decodeGmailBody(payload.body.data));
   let htmlFallback=null;
   for(const part of payload.parts||[]){
+    // Recurse into message/rfc822 (forwarded emails embed the original as a sub-message)
+    if(part.mimeType==='message/rfc822'&&part.parts){
+      const found=extractPlainText({parts:part.parts});
+      if(found&&found.length>100)return found;
+    }
     const found=extractPlainText(part);
-    if(found)return found;
+    if(found&&found.length>100)return found;
     if(!htmlFallback&&part.mimeType==='text/html'&&part.body?.data)htmlFallback=part.body.data;
   }
   if(htmlFallback)return htmlToText(decodeGmailBody(htmlFallback));
-  if(payload.mimeType==='text/html'&&payload.body?.data)return htmlToText(decodeGmailBody(payload.body.data));
   return'';
 }
 
@@ -1750,23 +1757,18 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
   }
   if(!property)console.warn('[Djubo] no property extracted',resId,'subj:',subject);
 
-  // Match "Check in\n16 Jun, 2026 14:00" or "Check in : 16 Jun, 2026 14:00" or inline table cell
-  const ciStr=(
-    body.match(/Check\s*in[\s\S]{0,15}\n\s*(\d{1,2}\s+\w{3},?\s+\d{4}[^\n]*)/i)?.[1]||
-    body.match(/Check\s*in\s*[:\-]\s*(\d{1,2}\s+\w{3},?\s+\d{4}[^\n]*)/i)?.[1]
-  )?.trim();
-  const coStr=(
-    body.match(/Check\s*out[\s\S]{0,15}\n\s*(\d{1,2}\s+\w{3},?\s+\d{4}[^\n]*)/i)?.[1]||
-    body.match(/Check\s*out\s*[:\-]\s*(\d{1,2}\s+\w{3},?\s+\d{4}[^\n]*)/i)?.[1]
-  )?.trim();
-  const guestName=body.match(/Guest Name\s*:\s*(.+)/)?.[1]?.trim()||'';
-  const guestEmail=body.match(/Guest Email\s*:\s*(.+)/)?.[1]?.trim()||'';
-  const guestPhone=body.match(/Guest Contact No\.\s*:\s*(.+)/)?.[1]?.trim()||'';
-  const createdBy=body.match(/Created By:\s*(.+)/)?.[1]?.trim()||'';
-  const createdOnStr=body.match(/Created On:\s*(.+)/)?.[1]?.trim()||'';
-  const resType=body.match(/Type of Reservation:\s*(.+)/)?.[1]?.trim()||'Direct';
-  const cancelPolicy=body.match(/CANCELLATION POLICY[\s\S]{0,20}\n(.+)/)?.[1]?.trim()||'';
-  const paymentSummary=body.match(/PAYMENT SUMMARY[\s\S]{0,20}\n(.+)/)?.[1]?.trim()||'';
+  // Field extraction — just look for keyword presence, grab the value in the next ~60 chars
+  const grab=(re)=>body.match(re)?.[1]?.replace(/[\r\n]/g,' ').trim()||'';
+  const ciStr=grab(/Check\s*[:-]?\s*in[\s\S]{0,60}?(\d{1,2}\s+\w{3,9}[\s,]+\d{4}[^\n\r]*)/i);
+  const coStr=grab(/Check\s*[:-]?\s*out[\s\S]{0,60}?(\d{1,2}\s+\w{3,9}[\s,]+\d{4}[^\n\r]*)/i);
+  const guestName=grab(/Guest\s*Name[\s\S]{0,10}?:\s*([^\n\r:]{2,60})/i);
+  const guestEmail=grab(/Guest\s*Email[\s\S]{0,10}?:\s*([^\s\n\r]{3,80})/i);
+  const guestPhone=grab(/Guest\s*Contact[\s\S]{0,20}?:\s*([^\n\r]{3,30})/i);
+  const createdBy=grab(/Created\s*By[\s\S]{0,5}?:\s*([^\n\r]{2,60})/i);
+  const createdOnStr=grab(/Created\s*On[\s\S]{0,5}?:\s*([^\n\r]{2,40})/i);
+  const resType=grab(/Type\s*of\s*Reservation[\s\S]{0,5}?:\s*([^\n\r]{2,40})/i)||'Direct';
+  const cancelPolicy=grab(/Cancellation\s*Policy[\s\S]{0,30}?:\s*([^\n\r]{2,120})/i);
+  const paymentSummary=grab(/Payment\s*Summary[\s\S]{0,30}?:\s*([^\n\r]{2,120})/i);
 
   // Parse rooms from table
   const rooms=[];
@@ -1799,12 +1801,12 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
   // Parse financials
   const fin=(re)=>{const m=body.match(re);return m?parseFloat(m[1].replace(/,/g,'')):0;};
   const financials={
-    roomRent:fin(/Room Rent\s+INR\s*([\d,]+\.?\d*)/),
-    discount:String(fin(/Discount Amount\s+INR\s*([\d,]+\.?\d*)/)||''),
-    subTotal:fin(/Sub Total\s+INR\s*([\d,]+\.?\d*)/),
-    taxes:String(fin(/Total Taxes\s+INR\s*([\d,]+\.?\d*)/)||''),
-    advance:String(fin(/Advance Amount\s+INR\s*([\d,]+\.?\d*)/)||''),
-    outstanding:fin(/Total outstanding amount\s+INR\s*([\d,]+\.?\d*)/)
+    roomRent:fin(/Room\s*Rent[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i),
+    discount:String(fin(/Discount[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i)||''),
+    subTotal:fin(/Sub\s*Total[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i),
+    taxes:String(fin(/Total\s*Tax[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i)||''),
+    advance:String(fin(/Advance[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i)||''),
+    outstanding:fin(/outstanding[\s\S]{0,20}?INR\s*([\d,]+\.?\d*)/i)
   };
 
   const creator=SALES_USERS.find(u=>u.name===createdBy);
