@@ -1663,25 +1663,17 @@ const DJUBO_NAME_MAP={
   'karthika nivas':'Karthika Nivas','marari sand':'Marari Sand',
   'beach house by the lake':'Beach House by the Lake','falling cashews':'Falling Cashews',
 };
-// Fuzzy match: extract property name from Djubo email subject
+// Extract property name from subject — used as fallback only
 function propFromSubject(subject){
-  // Subject format: "Reservation Confirmation - Seclude Pangot, Perch - SECP0001829"
-  // OR:             "Reservation Confirmation - Seclude Palampur - PAL0003010"
-  const m=subject.match(/Reservation\s+Confirmation\s*[-–]\s*(.+?)\s*[-–]\s*[A-Z]{2,6}\d/i);
-  if(!m)return null;
-  let raw=m[1].replace(/^Seclude\s*/i,'').trim();
-  // Direct lookup in Djubo name map (case-insensitive)
+  const parts=subject.split(/\s*[-–]\s*/);
+  const idx=parts.findIndex(p=>/Reservation\s+Confirmation/i.test(p));
+  if(idx<0||idx+1>=parts.length)return null;
+  const raw=parts[idx+1].replace(/^Seclude\s*/i,'').trim();
+  if(!raw||/^[A-Z]{2,}\d/.test(raw))return null; // skip if it looks like a resId
+  // Check DJUBO_NAME_MAP first
   const mapped=DJUBO_NAME_MAP[raw.toLowerCase()];
   if(mapped)return mapped;
-  // Try exact match against PROPERTIES
-  if(PROPERTIES.includes(raw))return raw;
-  // Normalise commas/punctuation
-  const norm=raw.replace(/[,\.]/g,'').replace(/\s+/g,' ').trim();
-  const match=PROPERTIES.find(p=>p.toLowerCase()===norm.toLowerCase());
-  if(match)return match;
-  // Partial match
-  const partial=PROPERTIES.find(p=>p.toLowerCase().startsWith(norm.toLowerCase().slice(0,5)));
-  return partial||null;
+  return raw; // return as-is — no hard validation against PROPERTIES list
 }
 const MONTH_IDX={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
 const KNOWN_MEAL_PLANS=['Room Only','CP - Breakfast','CP – Breakfast','MAP - Breakfast & Dinner','MAP – Breakfast & Dinner','AP - All Inclusive','AP','EP','CP'];
@@ -1726,23 +1718,37 @@ function extractPlainText(payload){
 }
 
 function parseDjuboBooking(body, gmailMsgId, subject=''){
-  const isReservationEmail=/Reservation\s+Confirmation/i.test(subject)||/djubo/i.test(body);
-  if(!isReservationEmail)return null;
-  // Extract resId — try subject first (most reliable), then body
-  // Matches any prefix: SECP0001829, PAL0003010, etc.
+  // Must be a Djubo reservation confirmation
+  if(!/Reservation\s+Confirmation/i.test(subject)&&!/djubo/i.test(body))return null;
+
+  // ── ResId: last dash-separated segment of subject is always the reservation ID ──
+  // e.g. "Fwd: Reservation Confirmation - Seclude Palampur - PAL0003010"
+  //      "Reservation Confirmation - Seclude Pangot, Perch - SECP0001829"
+  const subjParts=subject.split(/\s*[-–]\s*/);
   const resId=(
-    subject.match(/\b([A-Z]{2,6}\d{4,})\b/)?.[1]||
-    body.match(/Reservation ID[\s\S]{0,15}\n\s*([A-Z]{2,6}\d{4,})/)?.[1]||
-    body.match(/Reservation ID\s*[:\-]?\s*([A-Z]{2,6}\d{4,})/i)?.[1]||
-    body.match(/\b([A-Z]{2,6}\d{4,})\b/)?.[1]
+    subjParts[subjParts.length-1]?.match(/([A-Z]{2,}\d{4,})/)?.[1]||
+    body.match(/Reservation ID[\s\S]{0,15}\n\s*([A-Z]{2,}\d{4,})/)?.[1]||
+    body.match(/Reservation ID\s*[:\-]?\s*([A-Z]{2,}\d{4,})/i)?.[1]
   )?.trim();
-  if(!resId){console.warn('[Djubo] no resId in msg',gmailMsgId,'subject:',subject,'body start:',body.slice(0,300));return null;}
-  // Extract property — try subject first, then prefix map
-  const property=propFromSubject(subject)||(()=>{
-    const prefix=resId.match(/^([A-Z]+)/)?.[1];
-    return PROP_FROM_PREFIX[prefix]||null;
-  })();
-  if(!property){console.warn('[Djubo] unknown property for resId',resId,'subject:',subject);return null;}
+  if(!resId){console.warn('[Djubo] no resId',gmailMsgId,'subj:',subject);return null;}
+
+  // ── Property: middle segment of subject, strip "Seclude " prefix ──
+  // Don't validate against a hard list — accept whatever Djubo sends
+  let property='';
+  if(subjParts.length>=3){
+    // Remove "Fwd:" or "Re:" prefix from first segment if forwarded
+    const midStart=subjParts.findIndex(p=>/Reservation\s+Confirmation/i.test(p));
+    const mid=subjParts[midStart+1]||'';
+    property=mid.replace(/^Seclude\s*/i,'').trim();
+  }
+  if(!property){
+    // Fallback: try DJUBO_NAME_MAP or PROP_FROM_PREFIX
+    property=propFromSubject(subject)||(()=>{
+      const prefix=resId.match(/^([A-Z]+)/)?.[1];
+      return PROP_FROM_PREFIX[prefix]||'';
+    })();
+  }
+  if(!property){console.warn('[Djubo] no property',resId,'subj:',subject);return null;}
 
   // Match "Check in\n16 Jun, 2026 14:00" or "Check in : 16 Jun, 2026 14:00" or inline table cell
   const ciStr=(
@@ -1817,11 +1823,13 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
 }
 
 function parseDjuboCancellation(body, subject=''){
-  const isCancelEmail=/Reservation\s+Cancellation/i.test(subject)||/djubo/i.test(body);
-  if(!isCancelEmail)return null;
+  if(!/Reservation\s+Cancellation/i.test(subject)&&!/djubo/i.test(body))return null;
+  // ResId is always the last segment of the subject
+  const subjParts=subject.split(/\s*[-–]\s*/);
   const resId=(
-    subject.match(/\b([A-Z]{2,6}\d{4,})\b/)?.[1]||
-    body.match(/\b([A-Z]{2,6}\d{4,})\b/)?.[1]
+    subjParts[subjParts.length-1]?.match(/([A-Z]{2,}\d{4,})/)?.[1]||
+    body.match(/Reservation ID[\s\S]{0,15}\n\s*([A-Z]{2,}\d{4,})/)?.[1]||
+    body.match(/\b([A-Z]{2,}\d{4,})\b/)?.[1]
   );
   return resId||null;
 }
