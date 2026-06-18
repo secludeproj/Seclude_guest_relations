@@ -1718,8 +1718,8 @@ function extractPlainText(payload){
 }
 
 function parseDjuboBooking(body, gmailMsgId, subject=''){
-  // Must be a Djubo reservation confirmation
-  if(!/Reservation\s+Confirmation/i.test(subject)&&!/djubo/i.test(body))return null;
+  // Must have "Reservation Confirmation" in subject (Gmail query already filters this; body sender doesn't matter)
+  if(!/Reservation\s+Confirmation/i.test(subject))return null;
 
   // ── ResId: last dash-separated segment of subject is always the reservation ID ──
   // e.g. "Fwd: Reservation Confirmation - Seclude Palampur - PAL0003010"
@@ -1748,7 +1748,7 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
       return PROP_FROM_PREFIX[prefix]||'';
     })();
   }
-  if(!property){console.warn('[Djubo] no property',resId,'subj:',subject);return null;}
+  if(!property)console.warn('[Djubo] no property extracted',resId,'subj:',subject);
 
   // Match "Check in\n16 Jun, 2026 14:00" or "Check in : 16 Jun, 2026 14:00" or inline table cell
   const ciStr=(
@@ -1823,7 +1823,7 @@ function parseDjuboBooking(body, gmailMsgId, subject=''){
 }
 
 function parseDjuboCancellation(body, subject=''){
-  if(!/Reservation\s+Cancellation/i.test(subject)&&!/djubo/i.test(body))return null;
+  if(!/Reservation\s+Cancellation/i.test(subject))return null;
   // ResId is always the last segment of the subject
   const subjParts=subject.split(/\s*[-–]\s*/);
   const resId=(
