@@ -1615,8 +1615,8 @@ function OutreachPage({bookings,session,waTemplates,setWaTemplates,roomRates,onU
                 const stLabel={sent:"Sent",due:"Due",overdue:"Late",upcoming:"Soon",na:"N/A"};
                 return(
                   <div key={s.id}
-                    onClick={()=>{if(ss!=='na'&&ss!=='sent')setSendModal({booking:b,stageId:s.id});}}
-                    style={{background:stColors[ss]||"#F3F4F6",borderRadius:7,padding:"7px 8px",textAlign:"center",cursor:ss==='sent'||ss==='na'?'default':'pointer'}}>
+                    onClick={()=>{if(ss!=='na')setSendModal({booking:b,stageId:s.id});}}
+                    style={{background:stColors[ss]||"#F3F4F6",borderRadius:7,padding:"7px 8px",textAlign:"center",cursor:ss==='na'?'default':'pointer'}}>
                     <div style={{fontSize:".75rem"}}>{s.icon}</div>
                     <div style={{fontSize:".6rem",fontWeight:700,color:stTextColors[ss]||"var(--ink3)",marginTop:2}}>{s.label}</div>
                     <div style={{fontSize:".56rem",color:stTextColors[ss]||"var(--ink3)",marginTop:1}}>{stLabel[ss]||ss}</div>
