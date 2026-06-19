@@ -578,8 +578,9 @@ function useIsMobile(){
   },[]);
   return mob;
 }
-function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readOnly,customItems}){
+function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readOnly,customItems,setCustomItems,editItems}){
   const[lightbox,setLightbox]=useState(null);
+  const[addInputs,setAddInputs]=useState({});
   const isMobile=useIsMobile();
   const mk=monthKey(yr,mn);
   const propInv=INV[propId]||{};
@@ -588,16 +589,63 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
   const rooms=isRoom?(areaData.rooms||[]):[];
   // Merge custom items into subcats/items
   const cPropItems=(customItems&&customItems[propId]&&customItems[propId][area])||{};
+  const deleted=cPropItems["__deleted"]||[];
   let items=isRoom?[...(areaData.items||[])]:[];
   let subcats=isRoom?null:{...(areaData.subcats||{})};
   if(isRoom){
     const cRoom=cPropItems["__room"]||[];
-    items=[...new Set([...items,...cRoom])];
+    items=[...new Set([...items,...cRoom])].filter(i=>!deleted.includes(i));
   }else{
     Object.entries(cPropItems).forEach(([sc,its])=>{
-      if(sc==="__room")return;
+      if(sc==="__room"||sc==="__deleted")return;
       subcats[sc]=[...new Set([...(subcats[sc]||[]),...its])];
     });
+    if(subcats)Object.keys(subcats).forEach(sc=>{subcats[sc]=subcats[sc].filter(i=>!deleted.includes(i));});
+  }
+
+  function removeItem(item,subcat){
+    if(!setCustomItems)return;
+    const origDef=isRoom?(INV[propId]?.[area]?.items||[]):(subcat?(INV[propId]?.[area]?.subcats?.[subcat]||[]):[]);
+    const isDef=origDef.includes(item);
+    setCustomItems(prev=>{
+      const n=JSON.parse(JSON.stringify(prev||{}));
+      if(!n[propId])n[propId]={};if(!n[propId][area])n[propId][area]={};
+      if(isDef){
+        if(!n[propId][area]["__deleted"])n[propId][area]["__deleted"]=[];
+        if(!n[propId][area]["__deleted"].includes(item))n[propId][area]["__deleted"].push(item);
+      }else{
+        const key=subcat||"__room";
+        if(n[propId][area][key])n[propId][area][key]=n[propId][area][key].filter(i=>i!==item);
+      }
+      return n;
+    });
+  }
+  function doAddItem(subcat){
+    const key=subcat||"__room";
+    const name=(addInputs[key]||"").trim();
+    if(!name||!setCustomItems)return;
+    setCustomItems(prev=>{
+      const n=JSON.parse(JSON.stringify(prev||{}));
+      if(!n[propId])n[propId]={};if(!n[propId][area])n[propId][area]={};
+      if(!n[propId][area][key])n[propId][area][key]=[];
+      if(!n[propId][area][key].includes(name))n[propId][area][key].push(name);
+      return n;
+    });
+    setAddInputs(a=>({...a,[key]:""}));
+  }
+  function AddRow({subcat,colSpan}){
+    const key=subcat||"__room";
+    return(
+      <tr><td colSpan={colSpan} style={{padding:"5px 6px"}}>
+        <div style={{display:"flex",gap:4}}>
+          <input value={addInputs[key]||""} onChange={e=>setAddInputs(a=>({...a,[key]:e.target.value}))}
+            onKeyDown={e=>e.key==="Enter"&&doAddItem(subcat)}
+            placeholder="+ Type item name and press Enter or +"
+            style={{flex:1,padding:"4px 8px",border:"1px dashed #0F5C4C",borderRadius:5,fontSize:".74rem",outline:"none",fontFamily:"var(--ff)",background:"#F0FAF7"}}/>
+          <button onClick={()=>doAddItem(subcat)} style={{padding:"4px 10px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:5,fontSize:".74rem",cursor:"pointer",fontWeight:700}}>+</button>
+        </div>
+      </td></tr>
+    );
   }
   const allItems=subcats?Object.values(subcats).flat():items;
 
@@ -670,6 +718,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
           {isRoom&&<tr>
             <th className="item-col-head" rowSpan={2}>Item</th>
             {rooms.map(r=><th key={r} className="room-hd" colSpan={isMobile?2:3}>{r}</th>)}
+            {editItems&&<th rowSpan={2} style={{width:28}}/>}
           </tr>}
           {isRoom&&<tr>
             {rooms.map(r=><React.Fragment key={r}>
@@ -683,11 +732,12 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
             <th className="prop-hd" style={{minWidth:62}}>Condition</th>
             <th className="prop-hd" style={{minWidth:40}}>Quantity</th>
             <th className="prop-hd" style={{minWidth:36}}>Photo</th>
+            {editItems&&<th style={{width:28}}/>}
           </tr>}
         </thead>
         <tbody>
           {isRoom
-            ?items.map(item=><tr key={item}>
+            ?[...items.map(item=><tr key={item}>
               <td className="item-col">{item}</td>
               {rooms.map(room=>{
                 const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -701,12 +751,16 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                   {!isMobile&&<PhotoCell item={item} room={room}/>}
                 </React.Fragment>;
               })}
-            </tr>)
+              {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
+            </tr>),
+            ...(editItems?[<AddRow key="__add_room" subcat={null} colSpan={1+rooms.length*(isMobile?2:3)+1}/>]:[])
+            ]
             :subcats
               ?Object.entries(subcats).flatMap(([sub,sitems])=>[
                 <tr key={"sub-"+sub} className="subcat-row">
                   <td className="item-col" style={{color:"#0F5C4C",fontWeight:700}}>{sub}</td>
                   <td style={{background:"#F8F4EF"}}/><td style={{background:"#F8F4EF"}}/><td style={{background:"#F8F4EF"}}/>
+                  {editItems&&<td style={{background:"#F8F4EF"}}/>}
                 </tr>,
                 ...sitems.map(item=>{
                   const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -719,8 +773,10 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                       <input className="qty-inp" type="number" min="0" value={qty} placeholder="0" readOnly={readOnly} onChange={e=>setV(item,null,"qty",e.target.value)}/>
                     </td>
                     <PhotoCell item={item} room={null}/>
+                    {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,sub)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
                   </tr>;
-                })
+                }),
+                ...(editItems?[<AddRow key={"__add_"+sub} subcat={sub} colSpan={4+(editItems?1:0)}/>]:[])
               ])
               :allItems.map(item=>{
                 const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -733,6 +789,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     <input className="qty-inp" type="number" min="0" value={qty} placeholder="0" readOnly={readOnly} onChange={e=>setV(item,null,"qty",e.target.value)}/>
                   </td>
                   <PhotoCell item={item} room={null}/>
+                  {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
                 </tr>;
               })
           }
@@ -937,6 +994,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
   const[mn,setMn]=useState(today.m);
   const[showReqForm,setShowReqForm]=useState(false);
   const[showInvForm,setShowInvForm]=useState(false);
+  const[editItems,setEditItems]=useState(false);
   function prevMon(){if(mn===1){setYr(y=>y-1);setMn(12);}else setMn(m=>m-1);}
   function nextMon(){if(mn===12){setYr(y=>y+1);setMn(1);}else setMn(m=>m+1);}
   const myReqs=(requests||[]).filter(r=>r.propId===session.propId).slice(0,5);
@@ -951,6 +1009,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
         <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:10}}>{session.propName} · {session.submitter}</div>
         {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,.55)",whiteSpace:"nowrap",marginRight:4}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
         <button className="btn-g" style={{padding:"6px 12px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E",marginRight:4}} onClick={()=>setShowInvForm(true)}>📦 Inventory Received</button>
+        <button onClick={()=>setEditItems(m=>!m)} style={{padding:"6px 12px",fontSize:".74rem",border:"1.5px solid "+(editItems?"#0F5C4C":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:editItems?"#0F5C4C":"transparent",marginRight:4}}>{editItems?"✓ Done":"✏️ Edit Items"}</button>
         <button className="btn-req" style={{padding:"6px 12px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
         <button className="pm-exit" style={{marginLeft:8}} onClick={onLogout}>Exit ✕</button>
       </div>
@@ -965,7 +1024,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
         <div style={{fontSize:".72rem",color:"var(--ink3)",marginBottom:8,fontFamily:"var(--fm)"}}>
           Click <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontWeight:700}}>condition cell</span> to cycle · Enter quantities · Click 📷 to attach a photo · Scroll right for all rooms
         </div>
-        <PMExcelTable propId={session.propId} area={area} yr={yr} mn={mn} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} customItems={customItems}/>
+        <PMExcelTable propId={session.propId} area={area} yr={yr} mn={mn} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} customItems={customItems} setCustomItems={setCustomItems} editItems={editItems}/>
         {myReqs.length>0&&<div style={{marginTop:18}}>
           <div style={{fontWeight:700,fontSize:".82rem",marginBottom:8}}>Your Recent Requests</div>
           {myReqs.map(r=><div key={r.id} style={{background:"var(--white)",border:"1px solid var(--line)",borderRadius:9,padding:"10px 13px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
@@ -982,7 +1041,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
 }
 
 /* ══ HQ APP ═════════════════════════════════════════════════ */
-function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,proc,setProc}){
+function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc}){
   const[page,setPage]=useState("dashboard");
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
@@ -1060,7 +1119,7 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
         <div id="content">
           {page==="dashboard"&&<HQDashboard requests={requests||[]} proc={proc} exp={exp} onNav={nav}/>}
           {page==="properties"&&!selProp&&<HQPropList onSelect={p=>nav("properties",{prop:p})}/>}
-          {page==="properties"&&curProp&&<HQPropDetail prop={curProp} area={propArea} setArea={setPropArea} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} yr={yr} mn={mn} setYr={setYr} setMn={setMn} onBack={()=>setSelProp(null)} customItems={customItems}/>}
+          {page==="properties"&&curProp&&<HQPropDetail prop={curProp} area={propArea} setArea={setPropArea} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} yr={yr} mn={mn} setYr={setYr} setMn={setMn} onBack={()=>setSelProp(null)} customItems={customItems} setCustomItems={setCustomItems}/>}
           {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests} proc={proc} setProc={setProc}/>}
           {page==="purchases"&&<HQPurchases proc={proc} setProc={setProc}/>}
           {page==="expenses"&&<HQExpenses exp={exp} setExp={setExp}/>}
@@ -1164,7 +1223,7 @@ function HQPropList({onSelect}){
 }
 
 /* ══ HQ PROPERTY DETAIL ════════════════════════════════════ */
-function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn,setYr,setMn,onBack,customItems}){
+function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn,setYr,setMn,onBack,customItems,setCustomItems}){
   const[editMode,setEditMode]=useState(false);
   function prevMon(){if(mn===1){setYr(y=>y-1);setMn(12);}else setMn(m=>m-1);}
   function nextMon(){if(mn===12){setYr(y=>y+1);setMn(1);}else setMn(m=>m+1);}
@@ -1194,7 +1253,7 @@ function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn
       {!editMode&&<div style={{fontSize:".72rem",color:"var(--ink3)",marginBottom:10,fontFamily:"var(--fm)",background:"var(--gxl)",border:"1px solid var(--gl)",borderRadius:7,padding:"6px 12px"}}>
         HQ view · Click <strong>✏️ Edit Inventory</strong> to make changes · Click 📷 to upload photos
       </div>}
-      <PMExcelTable propId={prop.id} area={area} yr={yr} mn={mn} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} readOnly={!editMode} customItems={customItems}/>
+      <PMExcelTable propId={prop.id} area={area} yr={yr} mn={mn} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} readOnly={!editMode} customItems={customItems} setCustomItems={setCustomItems} editItems={editMode}/>
     </div>
   );
 }
@@ -1901,7 +1960,7 @@ function App(){
   if(!session)return<Login onLogin={handleLogin}/>;
   if(session.type==="pm")return<PMPortal session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc}/>;
   if(session.type==="office")return<OfficeStorage session={session} onLogout={handleLogout} officeItems={officeItems} setOfficeItems={setOfficeItems}/>;
-  return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} proc={proc} setProc={setProc}/>;
+  return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc}/>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
