@@ -409,6 +409,17 @@ function App(){
               </div>
             </div>
             {reviews.length>0&&<div style={{fontSize:12,color:"#9CA3AF",marginBottom:10}}>{filtered.length} review{filtered.length!==1?"s":""}{filtered.length<reviews.length?` of ${reviews.length} total`:""}</div>}
+            {/* Show fetch errors prominently */}
+            {Object.keys(errors).length>0&&(
+              <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"14px 16px",marginBottom:14}}>
+                <div style={{fontWeight:600,fontSize:13,color:"#991B1B",marginBottom:8}}>⚠ Fetch errors — check API setup</div>
+                {Object.entries(errors).map(([k,msg])=>(
+                  <div key={k} style={{fontSize:12,color:"#B91C1C",marginBottom:4}}>
+                    <b>{k}</b>: {msg}
+                  </div>
+                ))}
+              </div>
+            )}
             {!anyLoading&&reviews.length===0&&(
               <div style={{textAlign:"center",padding:"60px 24px",color:"#9CA3AF"}}>
                 <div style={{fontSize:36,marginBottom:10}}>⭐</div>
