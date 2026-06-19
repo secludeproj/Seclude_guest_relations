@@ -533,7 +533,8 @@ function Login({onLogin}){
           {err&&<div className="err">{err}</div>}
           <button className="btn-main" type="submit">Sign In</button>
         </form>
-        :<form onSubmit={e=>{
+        :mode==="pm"
+        ?<form onSubmit={e=>{
           e.preventDefault();
           if(!pmProp||!pmName.trim()){setErr("Select property and enter your name.");return;}
           const login=PM_LOGINS[pmProp];
@@ -552,8 +553,7 @@ function Login({onLogin}){
           {err&&<div className="err">{err}</div>}
           <button className="btn-main" type="submit">Open Dashboard →</button>
         </form>
-        :mode==="office"&&(
-          <form onSubmit={e=>{
+        :<form onSubmit={e=>{
             e.preventDefault();
             if(!offName.trim()){setErr("Enter your name.");return;}
             if(offPin.trim()!==OFFICE_PIN){setErr("Incorrect PIN. Contact HQ.");return;}
@@ -564,7 +564,7 @@ function Login({onLogin}){
             {err&&<div className="err">{err}</div>}
             <button className="btn-main" type="submit">Open Office Storage →</button>
           </form>
-        )}
+        }
     </div></div>
   );
 }
