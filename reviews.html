@@ -10,16 +10,31 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+try{
+  firebase.initializeApp({apiKey:"AIzaSyCzbDofACiuSslCH2pVMZzNDfLLQa2_dYI",authDomain:"seclude-ops.firebaseapp.com",projectId:"seclude-ops",storageBucket:"seclude-ops.firebasestorage.app",messagingSenderId:"953422377072",appId:"1:953422377072:web:b49f5c7463c876b497c4b5"});
+  window.rdb=firebase.firestore();
+  console.log("[Reviews] Firestore connected ✓");
+}catch(e){console.warn("[Reviews] Firebase unavailable",e);}
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Inter",system-ui,sans-serif;background:#F7F6F3;color:#18181B}
 input,select,textarea,button{font-family:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.review-card{animation:fadein .25s ease both}
-::-webkit-scrollbar{width:6px;height:6px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.review-card{animation:fadein .2s ease both}
+::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:#F1F5F9}
 ::-webkit-scrollbar-thumb{background:#C5D0DC;border-radius:3px}
+.tab-btn{padding:9px 18px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:#6B7280;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
+.tab-btn.active{color:#0F5C4C;border-bottom-color:#0F5C4C}
+.kpi-card{background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:18px 20px}
+.chart-card{background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:20px 22px}
 </style>
 </head>
 <body>
@@ -27,6 +42,7 @@ input,select,textarea,button{font-family:inherit}
 <script type="text/jsx" id="app-src">
 const{useState,useEffect,useRef,useCallback,useMemo}=React;
 
+/* ── constants ── */
 const PLATFORMS=[
   {id:"tripadvisor",name:"TripAdvisor",color:"#00AA6C",bg:"#E6F7F0",dark:"#006B45",hasApi:true},
   {id:"booking",    name:"Booking.com", color:"#003580",bg:"#E5EBF5",dark:"#002255",hasApi:true},
@@ -35,7 +51,6 @@ const PLATFORMS=[
   {id:"makemytrip", name:"MakeMyTrip",  color:"#ED1C24",bg:"#FEE8E8",dark:"#A81218",hasApi:false},
   {id:"goibibo",    name:"Goibibo",     color:"#E73C7E",bg:"#FDE8F1",dark:"#A8285A",hasApi:false},
 ];
-
 const ALL_PROPS=[
   {id:"pangot-perch",    name:"Pangot Perch"},
   {id:"mussoorie",       name:"Mussoorie"},
@@ -54,14 +69,9 @@ const ALL_PROPS=[
   {id:"cliffs-edge",     name:"Cliffs Edge"},
   {id:"red-cedar",       name:"Red Cedar"},
 ];
-
 const TA_BASE="https://api.content.tripadvisor.com/api/v1";
-
-const INIT_CONFIG={
-  tripadvisor:{apiKey:"",locations:{}},
-  booking:{username:"",password:"",proxyUrl:"",hotels:{}},
-  manual:{}
-};
+const STOP=new Set(["the","a","an","and","or","but","in","on","at","to","for","of","with","was","is","are","were","be","been","have","has","had","do","did","does","i","we","they","it","this","that","very","so","quite","really","just","also","would","could","should","will","our","their","your","my","its","us","them","there","from","by","not","no","as","if","what","when","which","who","how","more","most","some","all","than","then","her","his","she","he","me","him","one","two","get","got","our","can","its","too","any","may","but","yes","out","up","been","yet","say","now","new","old","good","great","nice","here","well"]);
+const INIT_CONFIG={tripadvisor:{apiKey:"",locations:{}},booking:{username:"",password:"",proxyUrl:"",hotels:{}},manual:{},anthropicKey:""};
 
 /* ── utils ── */
 function useLS(key,init){
@@ -70,111 +80,131 @@ function useLS(key,init){
   return[v,setV];
 }
 
+/* ── Firestore helpers ── */
+async function fsLoad(){
+  if(!window.rdb)return[];
+  try{
+    const snap=await window.rdb.collection("reviews").get();
+    const all=[];
+    snap.forEach(doc=>{all.push(...(doc.data().reviews||[]));});
+    return all;
+  }catch(e){console.warn("[FS reviews load]",e);return[];}
+}
+async function fsSave(platform,propId,newReviews){
+  if(!window.rdb||!newReviews.length)return;
+  try{
+    const ref=window.rdb.collection("reviews").doc(`${platform}_${propId}`);
+    const snap=await ref.get();
+    const existing=snap.exists?(snap.data().reviews||[]):[];
+    const existIds=new Set(existing.map(r=>r.id));
+    const fresh=newReviews.filter(r=>!existIds.has(r.id));
+    if(fresh.length)await ref.set({reviews:[...existing,...fresh],platform,propId,updatedAt:Date.now()},{merge:true});
+  }catch(e){console.warn("[FS reviews save]",e);}
+}
+
+/* ── Stars ── */
 function Stars({rating,size=14}){
   return(
     <span style={{display:"inline-flex",gap:1,lineHeight:1}}>
-      {[1,2,3,4,5].map(i=>(
-        <svg key={i} width={size} height={size} viewBox="0 0 24 24"
-          fill={i<=Math.round(rating)?"#FBBF24":"#E5E7EB"}>
-          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
-        </svg>
-      ))}
+      {[1,2,3,4,5].map(i=><svg key={i} width={size} height={size} viewBox="0 0 24 24" fill={i<=Math.round(rating)?"#FBBF24":"#E5E7EB"}><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>)}
     </span>
   );
 }
+function fmtDate(d){if(!d)return"";try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}catch{return d;}}
+function relDate(d){if(!d)return"";try{const days=Math.floor((Date.now()-new Date(d))/864e5);if(days<1)return"Today";if(days===1)return"Yesterday";if(days<7)return`${days}d ago`;if(days<30)return`${Math.floor(days/7)}w ago`;if(days<365)return`${Math.floor(days/30)}mo ago`;return`${Math.floor(days/365)}y ago`;}catch{return"";}}
 
-function fmtDate(d){
-  if(!d)return"";
-  try{return new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}
-  catch{return d;}
-}
-
-function relDate(d){
-  if(!d)return"";
-  try{
-    const days=Math.floor((Date.now()-new Date(d))/864e5);
-    if(days<1)return"Today";
-    if(days===1)return"Yesterday";
-    if(days<7)return`${days}d ago`;
-    if(days<30)return`${Math.floor(days/7)}w ago`;
-    if(days<365)return`${Math.floor(days/30)}mo ago`;
-    return`${Math.floor(days/365)}y ago`;
-  }catch{return"";}
-}
-
-/* ── TripAdvisor API ── */
+/* ── API: TripAdvisor ── */
 async function fetchTA(locationId,apiKey,propId,propName){
-  const headers={"accept":"application/json"};
+  const h={"accept":"application/json"};
   const[detRes,revRes]=await Promise.all([
-    fetch(`${TA_BASE}/location/${locationId}/details?key=${apiKey}&language=en`,{headers}),
-    fetch(`${TA_BASE}/location/${locationId}/reviews?key=${apiKey}&language=en`,{headers})
+    fetch(`${TA_BASE}/location/${locationId}/details?key=${apiKey}&language=en`,{headers:h}),
+    fetch(`${TA_BASE}/location/${locationId}/reviews?key=${apiKey}&language=en`,{headers:h})
   ]);
-  if(!detRes.ok)throw new Error(`TA API ${detRes.status}: ${await detRes.text().catch(()=>"")}`);
+  if(!detRes.ok)throw new Error(`TA API ${detRes.status}`);
   const det=await detRes.json();
   const rev=revRes.ok?await revRes.json():{data:[]};
   const reviews=(rev.data||[]).map(r=>({
-    id:`ta_${r.id}`,
-    platform:"tripadvisor",platformName:"TripAdvisor",
+    id:`ta_${r.id}`,platform:"tripadvisor",platformName:"TripAdvisor",
     propertyId:propId,propertyName:propName,
-    rating:r.rating||0,
-    title:r.title||"",text:r.text||"",
-    author:r.user?.username||"Guest",
-    authorLocation:r.user?.user_location?.name||"",
-    date:r.published_date||"",
-    tripType:(r.trip_type||"").toLowerCase().replace(/_/g," "),
+    rating:r.rating||0,title:r.title||"",text:r.text||"",
+    author:r.user?.username||"Guest",authorLocation:r.user?.user_location?.name||"",
+    date:r.published_date||"",tripType:(r.trip_type||"").toLowerCase().replace(/_/g," "),
     url:r.url||"",language:r.lang||"en",
   }));
-  return{
-    propId,platform:"tripadvisor",
-    avgRating:parseFloat(det.rating)||0,
-    reviewCount:parseInt(det.num_reviews)||0,
-    reviews
-  };
+  return{propId,platform:"tripadvisor",avgRating:parseFloat(det.rating)||0,reviewCount:parseInt(det.num_reviews)||0,reviews};
 }
 
-/* ── Booking.com API (requires CORS proxy) ── */
+/* ── API: Booking.com ── */
 async function fetchBooking(hotelId,cfg,propId,propName){
-  if(!cfg.proxyUrl)throw new Error("No CORS proxy configured for Booking.com.");
+  if(!cfg.proxyUrl)throw new Error("No CORS proxy for Booking.com.");
   const auth=btoa(`${cfg.username}:${cfg.password}`);
   const target=`https://api.booking.com/v1/hotels/${hotelId}/reviews?rows=25`;
-  const res=await fetch(`${cfg.proxyUrl}?url=${encodeURIComponent(target)}`,{
-    headers:{"X-Auth":`Basic ${auth}`,"accept":"application/json"}
-  });
+  const res=await fetch(`${cfg.proxyUrl}?url=${encodeURIComponent(target)}`,{headers:{"X-Auth":`Basic ${auth}`,"accept":"application/json"}});
   if(!res.ok)throw new Error(`Booking API ${res.status}`);
   const data=await res.json();
   const reviews=(Array.isArray(data)?data:(data.result||[])).map((r,i)=>({
-    id:`bk_${hotelId}_${r.review_id||i}`,
-    platform:"booking",platformName:"Booking.com",
+    id:`bk_${hotelId}_${r.review_id||i}`,platform:"booking",platformName:"Booking.com",
     propertyId:propId,propertyName:propName,
     rating:Math.round((r.average_score||r.score||0)/2*10)/10,
-    title:r.headline||"",
-    text:[r.pros,r.cons].filter(Boolean).join("\n\nCons: "),
-    author:r.author_name||"Guest",
-    authorLocation:r.countrycode||"",
-    date:r.date||r.check_out||"",
-    tripType:(r.tags?.[0]||"").toLowerCase(),
-    url:"",language:r.languagecode||"en",
+    title:r.headline||"",text:[r.pros,r.cons].filter(Boolean).join("\n\nCons: "),
+    author:r.author_name||"Guest",authorLocation:r.countrycode||"",
+    date:r.date||r.check_out||"",tripType:(r.tags?.[0]||"").toLowerCase(),url:"",language:r.languagecode||"en",
   }));
   return{propId,platform:"booking",avgRating:0,reviewCount:0,reviews};
 }
 
-/* ══════════════════════════════════════════════════════════════
-   APP
-══════════════════════════════════════════════════════════════ */
+/* ── AI summary via Claude ── */
+async function genSummary(reviews,propName,apiKey){
+  const text=reviews.slice(0,25).map(r=>`[${r.rating}★ — ${r.platform}] ${r.title?r.title+": ":""}${r.text||""}`).join("\n\n");
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},
+    body:JSON.stringify({
+      model:"claude-3-5-haiku-20241022",max_tokens:350,
+      messages:[{role:"user",content:`You are a hospitality analytics assistant for Seclude, a luxury boutique property brand in India. Analyze these guest reviews for "${propName}" and return a concise insight covering: (1) what guests love most, (2) main pain points or recurring complaints, (3) any notable trend. Keep it to 3–4 sentences, direct and actionable.\n\nReviews:\n${text}`}]
+    })
+  });
+  if(!res.ok){const t=await res.text();throw new Error(`Claude API ${res.status}: ${t.slice(0,120)}`);}
+  const d=await res.json();
+  return d.content[0].text;
+}
+
+/* ── Analytics helpers ── */
+function computeKeywords(revs,positive){
+  const freq={};
+  revs.filter(r=>positive?r.rating>=4:r.rating<=3).forEach(r=>{
+    const words=(r.text||"").toLowerCase().match(/\b[a-z]{4,}\b/g)||[];
+    words.forEach(w=>{if(!STOP.has(w))freq[w]=(freq[w]||0)+1;});
+  });
+  return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,12);
+}
+function byMonth(revs){
+  const m={};
+  revs.forEach(r=>{if(!r.date)return;const mk=r.date.slice(0,7);if(!m[mk])m[mk]={sum:0,cnt:0};m[mk].sum+=r.rating;m[mk].cnt++;});
+  return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
+}
+function avg(arr){return arr.length?arr.reduce((s,x)=>s+x,0)/arr.length:0;}
+
+/* ═══════════════════════ APP ═══════════════════════ */
 function App(){
   const[config,setConfig]=useLS("seclude_reviews_config",INIT_CONFIG);
-  const[reviews,setReviews]=useState([]);
-  const[stats,setStats]=useState({});      // {`${platform}_${propId}`: {avgRating,reviewCount}}
+  const[allReviews,setAllReviews]=useState([]);
+  const[stats,setStats]=useState({});
   const[loading,setLoading]=useState({});
   const[errors,setErrors]=useState({});
+  const[tab,setTab]=useState("feed");
   const[fPlatform,setFPlatform]=useState("all");
   const[fRating,setFRating]=useState(0);
   const[fProp,setFProp]=useState("all");
   const[fSearch,setFSearch]=useState("");
   const[showSettings,setShowSettings]=useState(false);
   const[importPlat,setImportPlat]=useState(null);
-
   const hasTAKey=!!(config.tripadvisor?.apiKey);
+
+  // Load accumulated reviews from Firestore on mount
+  useEffect(()=>{
+    fsLoad().then(stored=>{if(stored.length)setAllReviews(stored);});
+  },[]);
 
   const fetchAll=useCallback(async()=>{
     const locs=config.tripadvisor?.locations||{};
@@ -182,9 +212,7 @@ function App(){
     const bkHotels=config.booking?.hotels||{};
     const bkEntries=Object.entries(bkHotels).filter(([,id])=>id);
     if(!taEntries.length&&!bkEntries.length)return;
-
-    setReviews([]);setStats({});setErrors({});
-
+    setErrors({});
     const jobs=[
       ...taEntries.map(([propId,locationId])=>async()=>{
         const prop=ALL_PROPS.find(p=>p.id===propId);
@@ -193,7 +221,13 @@ function App(){
         try{
           const r=await fetchTA(locationId,config.tripadvisor.apiKey,propId,prop?.name||propId);
           setStats(s=>({...s,[k]:{avgRating:r.avgRating,reviewCount:r.reviewCount}}));
-          setReviews(rv=>[...rv,...r.reviews]);
+          // Merge new reviews, deduplicated
+          setAllReviews(prev=>{
+            const existIds=new Set(prev.map(x=>x.id));
+            const fresh=r.reviews.filter(x=>!existIds.has(x.id));
+            return fresh.length?[...prev,...fresh]:prev;
+          });
+          await fsSave("tripadvisor",propId,r.reviews);
         }catch(e){setErrors(er=>({...er,[k]:e.message}));}
         finally{setLoading(l=>({...l,[k]:false}));}
       }),
@@ -203,185 +237,169 @@ function App(){
         setLoading(l=>({...l,[k]:true}));
         try{
           const r=await fetchBooking(hotelId,config.booking,propId,prop?.name||propId);
-          setReviews(rv=>[...rv,...r.reviews]);
+          setAllReviews(prev=>{const existIds=new Set(prev.map(x=>x.id));const fresh=r.reviews.filter(x=>!existIds.has(x.id));return fresh.length?[...prev,...fresh]:prev;});
+          await fsSave("booking",propId,r.reviews);
         }catch(e){setErrors(er=>({...er,[k]:e.message}));}
         finally{setLoading(l=>({...l,[k]:false}));}
       }),
     ];
-
     await Promise.all(jobs.map(fn=>fn()));
   },[config]);
 
   useEffect(()=>{if(hasTAKey)fetchAll();},[]);
 
-  // Merge manual reviews stored in config
-  const allReviews=useMemo(()=>{
+  // Merge manual reviews from config
+  const reviews=useMemo(()=>{
     const manual=Object.values(config.manual||{}).flat();
-    return[...reviews,...manual].sort((a,b)=>new Date(b.date)-new Date(a.date));
-  },[reviews,config.manual]);
+    const manualIds=new Set(manual.map(r=>r.id));
+    const base=allReviews.filter(r=>!manualIds.has(r.id));
+    return[...base,...manual].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  },[allReviews,config.manual]);
 
-  const filtered=useMemo(()=>allReviews.filter(r=>{
+  const filtered=useMemo(()=>reviews.filter(r=>{
     if(fPlatform!=="all"&&r.platform!==fPlatform)return false;
     if(fRating>0&&r.rating<fRating)return false;
     if(fProp!=="all"&&r.propertyId!==fProp)return false;
-    if(fSearch){
-      const q=fSearch.toLowerCase();
-      if(![r.title,r.text,r.author,r.propertyName].join(" ").toLowerCase().includes(q))return false;
-    }
+    if(fSearch){const q=fSearch.toLowerCase();if(![r.title,r.text,r.author,r.propertyName].join(" ").toLowerCase().includes(q))return false;}
     return true;
-  }),[allReviews,fPlatform,fRating,fProp,fSearch]);
+  }),[reviews,fPlatform,fRating,fProp,fSearch]);
 
-  // Platform summary cards
   const platCards=PLATFORMS.map(p=>{
-    const myRevs=allReviews.filter(r=>r.platform===p.id);
+    const myRevs=reviews.filter(r=>r.platform===p.id);
     const statKeys=Object.keys(stats).filter(k=>k.startsWith(`${p.id}_`));
-    const officialAvg=statKeys.length
-      ?(statKeys.reduce((s,k)=>s+(stats[k]?.avgRating||0),0)/statKeys.length)
-      :(myRevs.length?myRevs.reduce((s,r)=>s+r.rating,0)/myRevs.length:0);
+    const officialAvg=statKeys.length?statKeys.reduce((s,k)=>s+(stats[k]?.avgRating||0),0)/statKeys.length:(myRevs.length?avg(myRevs.map(r=>r.rating)):0);
     const officialCount=statKeys.reduce((s,k)=>s+(stats[k]?.reviewCount||0),0)||myRevs.length;
     const errs=Object.entries(errors).filter(([k])=>k.startsWith(`${p.id}_`)).map(([,v])=>v);
     const isLoading=Object.entries(loading).some(([k,v])=>k.startsWith(`${p.id}_`)&&v);
     return{...p,avgRating:officialAvg,reviewCount:officialCount,fetchedCount:myRevs.length,errs,isLoading};
   });
 
-  const overallAvg=allReviews.length
-    ?allReviews.reduce((s,r)=>s+r.rating,0)/allReviews.length:0;
+  const overallAvg=reviews.length?avg(reviews.map(r=>r.rating)):0;
   const anyLoading=Object.values(loading).some(Boolean);
-  const configuredTA=Object.values(config.tripadvisor?.locations||{}).filter(Boolean).length;
 
   return(
     <div style={{minHeight:"100vh",background:"#F7F6F3"}}>
-      <TopBar onSettings={()=>setShowSettings(true)} onRefresh={fetchAll} loading={anyLoading}/>
+      <TopBar onSettings={()=>setShowSettings(true)} onRefresh={fetchAll} loading={anyLoading} tab={tab} setTab={setTab}/>
 
       {!hasTAKey&&(
-        <div style={{background:"linear-gradient(135deg,#0F5C4C,#1B7A5E)",color:"#fff",padding:"18px 28px",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{background:"linear-gradient(135deg,#0F5C4C,#1B7A5E)",color:"#fff",padding:"16px 28px",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
           <div style={{flex:1}}>
-            <div style={{fontWeight:600,fontSize:14,marginBottom:3}}>Connect your review platforms</div>
-            <div style={{fontSize:12,opacity:.85}}>Add your TripAdvisor API key in Settings to start pulling live reviews. Other platforms support manual import.</div>
+            <div style={{fontWeight:600,fontSize:14,marginBottom:2}}>Connect your review platforms</div>
+            <div style={{fontSize:12,opacity:.85}}>Add your TripAdvisor API key in Settings to pull live reviews. Other platforms support manual import.</div>
           </div>
-          <button onClick={()=>setShowSettings(true)} style={{padding:"9px 20px",background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600,fontSize:13}}>Open Settings →</button>
+          <button onClick={()=>setShowSettings(true)} style={{padding:"8px 18px",background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,color:"#fff",cursor:"pointer",fontWeight:600,fontSize:13}}>Open Settings →</button>
         </div>
       )}
 
-      <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 20px"}}>
-
-        {/* ── Overall score strip ── */}
-        {allReviews.length>0&&(
-          <div style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:16,padding:"22px 28px",marginBottom:24,display:"flex",gap:32,alignItems:"center",flexWrap:"wrap"}}>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"20px 20px"}}>
+        {/* Platform cards + overall score (always visible) */}
+        {reviews.length>0&&(
+          <div style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:14,padding:"18px 24px",marginBottom:20,display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
             <div style={{textAlign:"center",flexShrink:0}}>
-              <div style={{fontSize:"3rem",fontWeight:800,color:"#111",lineHeight:1}}>{overallAvg.toFixed(1)}</div>
+              <div style={{fontSize:"2.8rem",fontWeight:800,color:"#111",lineHeight:1}}>{overallAvg.toFixed(1)}</div>
               <Stars rating={overallAvg} size={16}/>
-              <div style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>across {platCards.filter(p=>p.fetchedCount>0||p.reviewCount>0).length} platforms</div>
+              <div style={{fontSize:11,color:"#9CA3AF",marginTop:3}}>{reviews.length} reviews</div>
             </div>
-            <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
+            <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(125px,1fr))",gap:8}}>
               {platCards.map(p=>(
                 <div key={p.id} onClick={()=>setFPlatform(fPlatform===p.id?"all":p.id)}
-                  style={{background:p.bg,border:`1.5px solid ${fPlatform===p.id?p.color:p.color+"33"}`,borderRadius:10,padding:"10px 12px",cursor:"pointer",transition:"box-shadow .15s",boxShadow:fPlatform===p.id?`0 0 0 3px ${p.color}33`:"none"}}>
-                  <div style={{fontSize:11,fontWeight:600,color:p.dark,marginBottom:3}}>{p.name}</div>
-                  {p.isLoading
-                    ?<div style={{fontSize:11,color:p.dark+"88"}}>Fetching…</div>
-                    :p.errs.length
-                    ?<div style={{fontSize:10,color:"#EF4444"}} title={p.errs[0]}>⚠ Error</div>
-                    :p.avgRating>0
-                    ?<><div style={{fontSize:"1.5rem",fontWeight:700,color:p.dark,lineHeight:1}}>{p.avgRating.toFixed(1)}</div>
-                      <div style={{fontSize:10,color:p.dark+"99",marginTop:2}}>{p.reviewCount?`${p.reviewCount.toLocaleString()} reviews`:`${p.fetchedCount} fetched`}</div></>
-                    :<div style={{fontSize:11,color:"#9CA3AF"}}>{p.hasApi?"Not configured":"No data"}</div>
-                  }
+                  style={{background:p.bg,border:`1.5px solid ${fPlatform===p.id?p.color:p.color+"33"}`,borderRadius:10,padding:"9px 11px",cursor:"pointer",boxShadow:fPlatform===p.id?`0 0 0 3px ${p.color}22`:"none"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:p.dark,marginBottom:2,letterSpacing:.3}}>{p.name.toUpperCase()}</div>
+                  {p.isLoading?<div style={{fontSize:11,color:p.dark+"88",animation:"pulse 1.5s infinite"}}>Fetching…</div>
+                    :p.errs.length?<div style={{fontSize:10,color:"#EF4444"}} title={p.errs[0]}>⚠ Error</div>
+                    :p.avgRating>0?<><div style={{fontSize:"1.4rem",fontWeight:700,color:p.dark,lineHeight:1}}>{p.avgRating.toFixed(1)}</div><div style={{fontSize:10,color:p.dark+"99",marginTop:1}}>{p.reviewCount?`${p.reviewCount.toLocaleString()} total`:`${p.fetchedCount} saved`}</div></>
+                    :<div style={{fontSize:11,color:"#9CA3AF"}}>{p.hasApi?"Not configured":"No data"}</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* ── Filters ── */}
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:16}}>
-          <div style={{position:"relative",flex:1,minWidth:180}}>
-            <svg style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}} width="14" height="14" fill="none" stroke="#9CA3AF" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input value={fSearch} onChange={e=>setFSearch(e.target.value)} placeholder="Search reviews…"
-              style={{width:"100%",padding:"8px 12px 8px 32px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff"}}/>
-          </div>
-          <select value={fPlatform} onChange={e=>setFPlatform(e.target.value)}
-            style={{padding:"8px 10px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff",cursor:"pointer"}}>
-            <option value="all">All Platforms</option>
-            {PLATFORMS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select value={fProp} onChange={e=>setFProp(e.target.value)}
-            style={{padding:"8px 10px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff",cursor:"pointer"}}>
-            <option value="all">All Properties</option>
-            {ALL_PROPS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select value={fRating} onChange={e=>setFRating(Number(e.target.value))}
-            style={{padding:"8px 10px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff",cursor:"pointer"}}>
-            <option value={0}>All Ratings</option>
-            {[5,4,3,2,1].map(n=><option key={n} value={n}>{n}★ +</option>)}
-          </select>
-          <div style={{borderLeft:"1px solid #E5E7EB",paddingLeft:8,display:"flex",gap:6,flexWrap:"wrap"}}>
-            {PLATFORMS.filter(p=>!p.hasApi).map(p=>(
-              <button key={p.id} onClick={()=>setImportPlat(p)}
-                style={{padding:"7px 11px",border:`1px solid ${p.color}55`,borderRadius:7,fontSize:11,fontWeight:600,color:p.dark,background:p.bg,cursor:"pointer"}}>
-                + {p.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Review count badge ── */}
-        {(allReviews.length>0||anyLoading)&&(
-          <div style={{fontSize:12,color:"#6B7280",marginBottom:12}}>
-            {anyLoading?"Fetching…":`${filtered.length} review${filtered.length!==1?"s":""}${filtered.length<allReviews.length?` of ${allReviews.length} total`:""}`}
-          </div>
+        {/* Feed tab */}
+        {tab==="feed"&&(
+          <>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:14}}>
+              <div style={{position:"relative",flex:1,minWidth:180}}>
+                <svg style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}} width="14" height="14" fill="none" stroke="#9CA3AF" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input value={fSearch} onChange={e=>setFSearch(e.target.value)} placeholder="Search reviews…"
+                  style={{width:"100%",padding:"8px 12px 8px 32px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff"}}/>
+              </div>
+              <select value={fPlatform} onChange={e=>setFPlatform(e.target.value)} style={{padding:"8px 10px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff",cursor:"pointer"}}>
+                <option value="all">All Platforms</option>
+                {PLATFORMS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select value={fProp} onChange={e=>setFProp(e.target.value)} style={{padding:"8px 10px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff",cursor:"pointer"}}>
+                <option value="all">All Properties</option>
+                {ALL_PROPS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select value={fRating} onChange={e=>setFRating(Number(e.target.value))} style={{padding:"8px 10px",border:"1px solid #E5E7EB",borderRadius:8,fontSize:13,outline:"none",background:"#fff",cursor:"pointer"}}>
+                <option value={0}>All Ratings</option>
+                {[5,4,3,2,1].map(n=><option key={n} value={n}>{n}★+</option>)}
+              </select>
+              <div style={{borderLeft:"1px solid #E5E7EB",paddingLeft:8,display:"flex",gap:6}}>
+                {PLATFORMS.filter(p=>!p.hasApi).map(p=>(
+                  <button key={p.id} onClick={()=>setImportPlat(p)}
+                    style={{padding:"7px 10px",border:`1px solid ${p.color}55`,borderRadius:7,fontSize:11,fontWeight:600,color:p.dark,background:p.bg,cursor:"pointer"}}>
+                    + {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {reviews.length>0&&<div style={{fontSize:12,color:"#9CA3AF",marginBottom:10}}>{filtered.length} review{filtered.length!==1?"s":""}{filtered.length<reviews.length?` of ${reviews.length} total`:""}</div>}
+            {!anyLoading&&reviews.length===0&&(
+              <div style={{textAlign:"center",padding:"60px 24px",color:"#9CA3AF"}}>
+                <div style={{fontSize:36,marginBottom:10}}>⭐</div>
+                <div style={{fontSize:14,fontWeight:600,color:"#374151",marginBottom:5}}>No reviews yet</div>
+                <div style={{fontSize:13}}>{hasTAKey?"Add TripAdvisor location IDs for your properties in Settings.":"Add your TripAdvisor API key in Settings to get started."}</div>
+                <button onClick={()=>setShowSettings(true)} style={{marginTop:14,padding:"9px 18px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>Open Settings</button>
+              </div>
+            )}
+            {filtered.length===0&&reviews.length>0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",fontSize:14}}>No reviews match your filters.</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {filtered.map(r=><ReviewCard key={r.id} r={r}/>)}
+            </div>
+          </>
         )}
 
-        {/* ── Empty state ── */}
-        {!anyLoading&&allReviews.length===0&&(
-          <div style={{textAlign:"center",padding:"60px 24px",color:"#9CA3AF"}}>
-            <div style={{fontSize:40,marginBottom:12}}>⭐</div>
-            <div style={{fontSize:15,fontWeight:600,color:"#374151",marginBottom:6}}>No reviews yet</div>
-            <div style={{fontSize:13}}>{hasTAKey&&configuredTA>0?"Reviews will appear here after syncing.":hasTAKey?"Add TripAdvisor location IDs for your properties in Settings.":"Add your TripAdvisor API key in Settings to get started."}</div>
-            <button onClick={()=>setShowSettings(true)} style={{marginTop:16,padding:"9px 20px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>Open Settings</button>
-          </div>
-        )}
+        {/* Analytics tab */}
+        {tab==="analytics"&&<AnalyticsView reviews={reviews} platCards={platCards}/>}
 
-        {/* ── Review feed ── */}
-        {filtered.length===0&&allReviews.length>0&&(
-          <div style={{textAlign:"center",padding:40,color:"#9CA3AF",fontSize:14}}>No reviews match your filters.</div>
-        )}
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {filtered.map(r=><ReviewCard key={r.id} r={r}/>)}
-        </div>
-
+        {/* AI Insights tab */}
+        {tab==="insights"&&<AIInsights reviews={reviews} config={config} setConfig={setConfig}/>}
       </div>
 
-      {showSettings&&(
-        <SettingsModal config={config} setConfig={setConfig}
-          onClose={()=>setShowSettings(false)} onFetch={fetchAll}/>
-      )}
-      {importPlat&&(
-        <ImportModal platform={importPlat} config={config} setConfig={setConfig}
-          onClose={()=>setImportPlat(null)}/>
-      )}
+      {showSettings&&<SettingsModal config={config} setConfig={setConfig} onClose={()=>setShowSettings(false)} onFetch={fetchAll}/>}
+      {importPlat&&<ImportModal platform={importPlat} config={config} setConfig={setConfig} onClose={()=>setImportPlat(null)}/>}
     </div>
   );
 }
 
 /* ── Top bar ── */
-function TopBar({onSettings,onRefresh,loading}){
+function TopBar({onSettings,onRefresh,loading,tab,setTab}){
   return(
-    <div style={{background:"#fff",borderBottom:"1px solid #E5E7EB",padding:"11px 24px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:100}}>
-      <svg height="20" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
-        <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(15,92,76,.9)" letterSpacing="3">SECLUDE</text>
-      </svg>
-      <div style={{width:1,height:18,background:"#E5E7EB"}}/>
-      <span style={{fontSize:13,fontWeight:600,color:"#374151"}}>Reviews</span>
-      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+    <div style={{background:"#fff",borderBottom:"1px solid #E5E7EB",padding:"0 24px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:100}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",flexShrink:0}}>
+        <svg height="20" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(15,92,76,.9)" letterSpacing="3">SECLUDE</text>
+        </svg>
+        <div style={{width:1,height:18,background:"#E5E7EB"}}/>
+        <span style={{fontSize:13,fontWeight:600,color:"#374151"}}>Reviews</span>
+      </div>
+      {/* Tabs */}
+      <div style={{display:"flex",gap:0,borderBottom:"none",flex:1,paddingLeft:8}}>
+        {[["feed","Reviews Feed"],["analytics","Analytics"],["insights","AI Insights"]].map(([t,label])=>(
+          <button key={t} className={`tab-btn${tab===t?" active":""}`} onClick={()=>setTab(t)}>{label}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,padding:"11px 0"}}>
         <button onClick={onRefresh} disabled={loading}
           style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",border:"1px solid #E5E7EB",borderRadius:7,background:"#fff",fontSize:12,cursor:loading?"not-allowed":"pointer",color:"#374151",opacity:loading?.6:1}}>
-          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"
-            style={{animation:loading?"spin 1s linear infinite":"none"}}><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{animation:loading?"spin 1s linear infinite":"none"}}><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
           {loading?"Syncing…":"Refresh"}
         </button>
-        <a href="index.html" style={{padding:"6px 12px",border:"1px solid #E5E7EB",borderRadius:7,fontSize:12,color:"#374151",textDecoration:"none"}}>Guest Relations</a>
-        <a href="operations.html" style={{padding:"6px 12px",border:"1px solid #E5E7EB",borderRadius:7,fontSize:12,color:"#374151",textDecoration:"none"}}>Inventory</a>
+        {window.rdb&&<span style={{fontSize:11,color:"#10B981",display:"flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:"50%",background:"#10B981",display:"inline-block"}}/>Live</span>}
+        <a href="index.html" style={{padding:"6px 10px",border:"1px solid #E5E7EB",borderRadius:7,fontSize:12,color:"#374151",textDecoration:"none"}}>Guest Relations</a>
+        <a href="operations.html" style={{padding:"6px 10px",border:"1px solid #E5E7EB",borderRadius:7,fontSize:12,color:"#374151",textDecoration:"none"}}>Inventory</a>
         <button onClick={onSettings} style={{padding:"6px 8px",border:"1px solid #E5E7EB",borderRadius:7,background:"#fff",cursor:"pointer",display:"flex",alignItems:"center"}}>
           <svg width="15" height="15" fill="none" stroke="#6B7280" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -394,40 +412,305 @@ function TopBar({onSettings,onRefresh,loading}){
 function ReviewCard({r}){
   const[exp,setExp]=useState(false);
   const plat=PLATFORMS.find(p=>p.id===r.platform)||{color:"#6B7280",bg:"#F3F4F6",dark:"#374151",name:r.platform};
-  const LIMIT=280;
-  const long=r.text&&r.text.length>LIMIT;
+  const LIMIT=280;const long=r.text&&r.text.length>LIMIT;
   const displayText=long&&!exp?r.text.slice(0,LIMIT)+"…":r.text;
-
   return(
-    <div className="review-card" style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"16px 20px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <span style={{background:plat.bg,color:plat.dark,fontSize:"10px",fontWeight:700,padding:"3px 8px",borderRadius:20,border:`1px solid ${plat.color}44`,letterSpacing:.3}}>{plat.name.toUpperCase()}</span>
+    <div className="review-card" style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"15px 18px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:7}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+          <span style={{background:plat.bg,color:plat.dark,fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:20,border:`1px solid ${plat.color}44`,letterSpacing:.3}}>{plat.name.toUpperCase()}</span>
           <span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{r.propertyName}</span>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <Stars rating={r.rating} size={12}/>
-          <span style={{fontSize:"11px",fontWeight:700,color:"#374151"}}>{r.rating}/5</span>
+        <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+          <Stars rating={r.rating} size={12}/><span style={{fontSize:11,fontWeight:700,color:"#374151"}}>{r.rating}/5</span>
           <span style={{fontSize:11,color:"#9CA3AF"}}>{relDate(r.date)}</span>
-          {r.url&&<a href={r.url} target="_blank" rel="noopener noreferrer"
-            style={{fontSize:11,color:"#0F5C4C",textDecoration:"none",border:"1px solid #0F5C4C33",padding:"1px 6px",borderRadius:4}}>View ↗</a>}
+          {r.url&&<a href={r.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:"#0F5C4C",border:"1px solid #0F5C4C33",padding:"1px 5px",borderRadius:4,textDecoration:"none"}}>↗</a>}
         </div>
       </div>
-      {r.title&&<div style={{fontWeight:600,fontSize:"13.5px",color:"#111",marginBottom:5}}>{r.title}</div>}
-      {r.text&&(
-        <>
-          <div style={{fontSize:13,color:"#4B5563",lineHeight:1.65,whiteSpace:"pre-wrap"}}>{displayText}</div>
-          {long&&<button onClick={()=>setExp(e=>!e)}
-            style={{marginTop:4,fontSize:11,color:"#0F5C4C",background:"none",border:"none",cursor:"pointer",padding:0,fontWeight:600}}>
-            {exp?"Show less ↑":"Read more ↓"}
-          </button>}
-        </>
-      )}
-      <div style={{display:"flex",gap:12,marginTop:10,fontSize:"11px",color:"#9CA3AF",flexWrap:"wrap",alignItems:"center"}}>
+      {r.title&&<div style={{fontWeight:600,fontSize:"13px",color:"#111",marginBottom:4}}>{r.title}</div>}
+      {r.text&&<><div style={{fontSize:13,color:"#4B5563",lineHeight:1.65,whiteSpace:"pre-wrap"}}>{displayText}</div>
+        {long&&<button onClick={()=>setExp(e=>!e)} style={{marginTop:3,fontSize:11,color:"#0F5C4C",background:"none",border:"none",cursor:"pointer",padding:0,fontWeight:600}}>{exp?"Show less ↑":"Read more ↓"}</button>}</>}
+      <div style={{display:"flex",gap:10,marginTop:8,fontSize:"11px",color:"#9CA3AF",flexWrap:"wrap",alignItems:"center"}}>
         <span style={{fontWeight:500,color:"#6B7280"}}>— {r.author}</span>
         {r.authorLocation&&<span>{r.authorLocation}</span>}
-        {r.tripType&&<span style={{background:"#F3F4F6",padding:"1px 6px",borderRadius:4,textTransform:"capitalize"}}>{r.tripType}</span>}
+        {r.tripType&&<span style={{background:"#F3F4F6",padding:"1px 5px",borderRadius:4,textTransform:"capitalize"}}>{r.tripType}</span>}
         <span>{fmtDate(r.date)}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Chart canvas wrapper ── */
+function ChartCanvas({type,data,options={},height=220}){
+  const ref=useRef(null);const chart=useRef(null);
+  const key=JSON.stringify({type,data});
+  useEffect(()=>{
+    if(!ref.current||!window.Chart)return;
+    if(chart.current)chart.current.destroy();
+    chart.current=new Chart(ref.current,{type,data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}}},scales:type==="bar"||type==="line"?{y:{beginAtZero:true,grid:{color:"#F3F4F6"},ticks:{font:{size:11}}},x:{grid:{display:false},ticks:{font:{size:11}}}}:undefined,...options}});
+    return()=>{if(chart.current)chart.current.destroy();};
+  },[key]);
+  return<div style={{height,position:"relative"}}><canvas ref={ref}/></div>;
+}
+
+/* ── Analytics view ── */
+function AnalyticsView({reviews,platCards}){
+  if(!reviews.length)return(
+    <div style={{textAlign:"center",padding:"60px 24px",color:"#9CA3AF"}}>
+      <div style={{fontSize:36,marginBottom:10}}>📊</div>
+      <div style={{fontSize:14,fontWeight:600,color:"#374151",marginBottom:5}}>No data to analyse yet</div>
+      <div style={{fontSize:13}}>Add reviews via the Feed tab — refresh to fetch from TripAdvisor or import manually.</div>
+    </div>
+  );
+
+  // KPIs
+  const totalReviews=reviews.length;
+  const overallAvg=avg(reviews.map(r=>r.rating));
+  const now=new Date();
+  const thisMonth=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const lastMonth=new Date(now.getFullYear(),now.getMonth()-1,1);
+  const lastMonthKey=`${lastMonth.getFullYear()}-${String(lastMonth.getMonth()+1).padStart(2,"0")}`;
+  const thisMonthRevs=reviews.filter(r=>r.date?.startsWith(thisMonth));
+  const lastMonthRevs=reviews.filter(r=>r.date?.startsWith(lastMonthKey));
+  const thisMonthAvg=thisMonthRevs.length?avg(thisMonthRevs.map(r=>r.rating)):0;
+  const lastMonthAvg=lastMonthRevs.length?avg(lastMonthRevs.map(r=>r.rating)):0;
+  const trend=thisMonthAvg-lastMonthAvg;
+  const pct5=Math.round(reviews.filter(r=>r.rating>=4.5).length/totalReviews*100);
+
+  // Best property
+  const propAvgs=ALL_PROPS.map(p=>{const rr=reviews.filter(r=>r.propertyId===p.id);return{name:p.name,avg:rr.length?avg(rr.map(r=>r.rating)):0,cnt:rr.length};}).filter(p=>p.cnt>0).sort((a,b)=>b.avg-a.avg);
+  const bestProp=propAvgs[0];
+  const worstProp=propAvgs[propAvgs.length-1];
+
+  // Monthly trend data
+  const monthlyEntries=byMonth(reviews);
+  const monthLabels=monthlyEntries.map(([mk])=>{const[y,m]=mk.split("-");return`${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m)-1]} ${y.slice(2)}`;});
+  const monthAvgs=monthlyEntries.map(([,v])=>+(v.sum/v.cnt).toFixed(2));
+  const monthCounts=monthlyEntries.map(([,v])=>v.cnt);
+
+  // Rating distribution
+  const dist=[1,2,3,4,5].map(n=>reviews.filter(r=>Math.round(r.rating)===n).length);
+
+  // Platform comparison
+  const activePlats=platCards.filter(p=>p.avgRating>0||p.fetchedCount>0);
+
+  // Keywords
+  const posKw=computeKeywords(reviews,true);
+  const negKw=computeKeywords(reviews,false);
+
+  const GREENS=["#0F5C4C","#1B7A5E","#26926F","#31A97F","#3DC190","#48D9A0","#6FE4B4","#96EEC8"];
+  const PLAT_COLORS={"tripadvisor":"#00AA6C","booking":"#003580","airbnb":"#FF5A5F","agoda":"#EB3D4D","makemytrip":"#ED1C24","goibibo":"#E73C7E"};
+
+  return(
+    <div>
+      {/* KPI row */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:12,marginBottom:20}}>
+        {[
+          {label:"Overall Rating",value:overallAvg.toFixed(2),sub:`${totalReviews} reviews`,accent:"#0F5C4C"},
+          {label:"This Month Avg",value:thisMonthAvg?thisMonthAvg.toFixed(2):"—",sub:trend?`${trend>0?"▲":"▼"} ${Math.abs(trend).toFixed(2)} vs last month`:`${thisMonthRevs.length} reviews`,accent:trend>0?"#10B981":trend<0?"#EF4444":"#6B7280"},
+          {label:"5★ Reviews",value:`${pct5}%`,sub:`${reviews.filter(r=>r.rating>=4.5).length} of ${totalReviews}`,accent:"#FBBF24"},
+          {label:"New This Month",value:thisMonthRevs.length,sub:`vs ${lastMonthRevs.length} last month`,accent:"#3B82F6"},
+          bestProp&&{label:"Best Property",value:bestProp.avg.toFixed(1)+"★",sub:bestProp.name,accent:"#10B981"},
+          worstProp&&propAvgs.length>1&&{label:"Needs Attention",value:worstProp.avg.toFixed(1)+"★",sub:worstProp.name,accent:"#EF4444"},
+        ].filter(Boolean).map((k,i)=>(
+          <div key={i} className="kpi-card">
+            <div style={{fontSize:11,fontWeight:600,color:"#9CA3AF",letterSpacing:.4,marginBottom:6}}>{k.label.toUpperCase()}</div>
+            <div style={{fontSize:"1.8rem",fontWeight:800,color:k.accent,lineHeight:1}}>{k.value}</div>
+            <div style={{fontSize:11,color:"#6B7280",marginTop:4}}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts row 1: trend + distribution */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:14,marginBottom:14}}>
+        <div className="chart-card">
+          <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:4}}>Avg Rating Over Time</div>
+          <div style={{fontSize:11,color:"#9CA3AF",marginBottom:12}}>Monthly average across all platforms</div>
+          <ChartCanvas type="line" height={200} data={{
+            labels:monthLabels,
+            datasets:[{label:"Avg Rating",data:monthAvgs,borderColor:"#0F5C4C",backgroundColor:"rgba(15,92,76,.08)",borderWidth:2,pointBackgroundColor:"#0F5C4C",pointRadius:4,tension:.35,fill:true}]
+          }} options={{plugins:{legend:{display:false}},scales:{y:{min:0,max:5,ticks:{stepSize:1}}}}}/>
+        </div>
+        <div className="chart-card">
+          <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:4}}>Rating Distribution</div>
+          <div style={{fontSize:11,color:"#9CA3AF",marginBottom:12}}>All reviews by star rating</div>
+          <ChartCanvas type="doughnut" height={180} data={{
+            labels:["1★","2★","3★","4★","5★"],
+            datasets:[{data:dist,backgroundColor:["#EF4444","#F97316","#FBBF24","#86EFAC","#0F5C4C"],borderWidth:0}]
+          }} options={{cutout:"62%",plugins:{legend:{position:"right",labels:{boxWidth:10,font:{size:11}}}}}}/>
+        </div>
+      </div>
+
+      {/* Charts row 2: volume + platform */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+        <div className="chart-card">
+          <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:4}}>Review Volume</div>
+          <div style={{fontSize:11,color:"#9CA3AF",marginBottom:12}}>Number of reviews per month</div>
+          <ChartCanvas type="bar" height={180} data={{
+            labels:monthLabels,
+            datasets:[{label:"Reviews",data:monthCounts,backgroundColor:"rgba(15,92,76,.7)",borderRadius:4,borderSkipped:false}]
+          }} options={{plugins:{legend:{display:false}}}}/>
+        </div>
+        <div className="chart-card">
+          <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:4}}>Platform Comparison</div>
+          <div style={{fontSize:11,color:"#9CA3AF",marginBottom:12}}>Average rating by platform</div>
+          <ChartCanvas type="bar" height={180} data={{
+            labels:activePlats.map(p=>p.name),
+            datasets:[{label:"Avg Rating",data:activePlats.map(p=>+p.avgRating.toFixed(2)),backgroundColor:activePlats.map(p=>PLAT_COLORS[p.id]||"#6B7280"),borderRadius:4,borderSkipped:false}]
+          }} options={{plugins:{legend:{display:false}},scales:{y:{min:0,max:5}}}}/>
+        </div>
+      </div>
+
+      {/* Property leaderboard */}
+      {propAvgs.length>0&&(
+        <div className="chart-card" style={{marginBottom:14}}>
+          <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:4}}>Property Leaderboard</div>
+          <div style={{fontSize:11,color:"#9CA3AF",marginBottom:12}}>Ranked by average guest rating</div>
+          <ChartCanvas type="bar" height={Math.max(140,propAvgs.length*28)} data={{
+            labels:propAvgs.map(p=>p.name),
+            datasets:[{label:"Avg Rating",data:propAvgs.map(p=>+p.avg.toFixed(2)),backgroundColor:propAvgs.map((_,i)=>GREENS[i%GREENS.length]),borderRadius:4,borderSkipped:false}]
+          }} options={{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{min:0,max:5}}}}/>
+        </div>
+      )}
+
+      {/* Keywords */}
+      {(posKw.length>0||negKw.length>0)&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+          {[[posKw,"Positive Keywords (4–5★)","#0F5C4C","rgba(15,92,76,.7)"],[negKw,"Critical Keywords (1–3★)","#EF4444","rgba(239,68,68,.65)"]].map(([kws,title,col,fill])=>(
+            kws.length>0&&(
+              <div key={title} className="chart-card">
+                <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:4}}>{title}</div>
+                <div style={{fontSize:11,color:"#9CA3AF",marginBottom:12}}>Most frequent words in reviews</div>
+                <ChartCanvas type="bar" height={200} data={{
+                  labels:kws.map(([w])=>w),
+                  datasets:[{label:"Mentions",data:kws.map(([,c])=>c),backgroundColor:fill,borderRadius:3,borderSkipped:false}]
+                }} options={{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{stepSize:1}}}}}/>
+              </div>
+            )
+          ))}
+        </div>
+      )}
+
+      {/* Sentiment split */}
+      {reviews.length>0&&(()=>{
+        const pos=reviews.filter(r=>r.rating>=4).length;
+        const neu=reviews.filter(r=>r.rating===3).length;
+        const neg=reviews.filter(r=>r.rating<3).length;
+        const pPct=Math.round(pos/reviews.length*100);
+        const nuPct=Math.round(neu/reviews.length*100);
+        const nPct=Math.round(neg/reviews.length*100);
+        return(
+          <div className="chart-card" style={{marginBottom:14}}>
+            <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:12}}>Sentiment Overview</div>
+            <div style={{display:"flex",gap:0,height:24,borderRadius:8,overflow:"hidden",marginBottom:10}}>
+              {pPct>0&&<div style={{flex:pPct,background:"#0F5C4C",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff"}}>{pPct>8?`${pPct}%`:""}</div>}
+              {nuPct>0&&<div style={{flex:nuPct,background:"#FBBF24",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff"}}>{nuPct>8?`${nuPct}%`:""}</div>}
+              {nPct>0&&<div style={{flex:nPct,background:"#EF4444",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff"}}>{nPct>8?`${nPct}%`:""}</div>}
+            </div>
+            <div style={{display:"flex",gap:20,fontSize:12,color:"#6B7280"}}>
+              <span><b style={{color:"#0F5C4C"}}>{pos}</b> Positive (4–5★) {pPct}%</span>
+              <span><b style={{color:"#B45309"}}>{neu}</b> Neutral (3★) {nuPct}%</span>
+              <span><b style={{color:"#EF4444"}}>{neg}</b> Critical (1–2★) {nPct}%</span>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/* ── AI Insights ── */
+function AIInsights({reviews,config,setConfig}){
+  const[summaries,setSummaries]=useLS("seclude_ai_summaries",{});
+  const[loading,setLoading]=useState({});
+  const[errors,setErrors]=useState({});
+  const apiKey=config.anthropicKey||"";
+
+  const propsWithReviews=ALL_PROPS.filter(p=>reviews.some(r=>r.propertyId===p.id));
+
+  async function generate(prop){
+    if(!apiKey){alert("Add your Anthropic API key in Settings → AI tab.");return;}
+    const propRevs=reviews.filter(r=>r.propertyId===prop.id);
+    if(!propRevs.length){alert("No reviews for this property yet.");return;}
+    setLoading(l=>({...l,[prop.id]:true}));
+    setErrors(e=>({...e,[prop.id]:null}));
+    try{
+      const text=await genSummary(propRevs,prop.name,apiKey);
+      const entry={text,generatedAt:new Date().toISOString(),reviewCount:propRevs.length,avgRating:avg(propRevs.map(r=>r.rating))};
+      setSummaries(s=>({...s,[prop.id]:entry}));
+    }catch(e){setErrors(er=>({...er,[prop.id]:e.message}));}
+    finally{setLoading(l=>({...l,[prop.id]:false}));}
+  }
+
+  async function generateAll(){
+    if(!apiKey){alert("Add your Anthropic API key in Settings → AI tab.");return;}
+    for(const p of propsWithReviews){
+      await generate(p);
+      await new Promise(r=>setTimeout(r,500));// small delay between calls
+    }
+  }
+
+  if(!reviews.length)return(
+    <div style={{textAlign:"center",padding:"60px 24px",color:"#9CA3AF"}}>
+      <div style={{fontSize:36,marginBottom:10}}>🤖</div>
+      <div style={{fontSize:14,fontWeight:600,color:"#374151",marginBottom:5}}>No reviews to analyse</div>
+      <div style={{fontSize:13}}>Add reviews from the Feed tab first.</div>
+    </div>
+  );
+
+  return(
+    <div>
+      {/* Header */}
+      <div style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"16px 20px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:14,color:"#111"}}>AI-Powered Property Insights</div>
+          <div style={{fontSize:12,color:"#6B7280",marginTop:2}}>Claude analyses your reviews and surfaces key themes, praise, and pain points per property</div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {!apiKey&&<span style={{fontSize:12,color:"#EF4444"}}>⚠ Add Anthropic API key in Settings</span>}
+          <button onClick={generateAll} disabled={!apiKey||propsWithReviews.length===0}
+            style={{padding:"8px 16px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:8,cursor:apiKey?"pointer":"not-allowed",fontSize:13,fontWeight:600,opacity:apiKey?1:.5}}>
+            ✦ Generate All
+          </button>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+        {propsWithReviews.map(prop=>{
+          const propRevs=reviews.filter(r=>r.propertyId===prop.id);
+          const s=summaries[prop.id];
+          const isLoading=loading[prop.id];
+          const err=errors[prop.id];
+          const propAvg=avg(propRevs.map(r=>r.rating));
+          return(
+            <div key={prop.id} style={{background:"#fff",border:"1px solid #E5E7EB",borderRadius:12,padding:"16px 18px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:13,color:"#111"}}>{prop.name}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}>
+                    <Stars rating={propAvg} size={11}/>
+                    <span style={{fontSize:11,color:"#6B7280"}}>{propAvg.toFixed(2)} · {propRevs.length} review{propRevs.length!==1?"s":""}</span>
+                  </div>
+                </div>
+                <button onClick={()=>generate(prop)} disabled={isLoading||!apiKey}
+                  style={{padding:"6px 12px",background:s?"#F0FDF4":"#0F5C4C",color:s?"#0F5C4C":"#fff",border:s?"1px solid #86EFAC":"none",borderRadius:7,fontSize:11,cursor:apiKey?"pointer":"not-allowed",fontWeight:600,flexShrink:0,opacity:apiKey?1:.5}}>
+                  {isLoading?<svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{animation:"spin 1s linear infinite"}}><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>:s?"↻ Refresh":"✦ Analyse"}
+                </button>
+              </div>
+              {isLoading&&<div style={{fontSize:13,color:"#6B7280",padding:"12px 0",animation:"pulse 1.5s infinite"}}>Claude is analysing {propRevs.length} reviews…</div>}
+              {err&&!isLoading&&<div style={{fontSize:12,color:"#EF4444",background:"#FEF2F2",padding:"8px 10px",borderRadius:7}}>{err}</div>}
+              {s&&!isLoading&&(
+                <>
+                  <div style={{fontSize:13,color:"#374151",lineHeight:1.7,borderLeft:"3px solid #0F5C4C",paddingLeft:12}}>{s.text}</div>
+                  <div style={{fontSize:10,color:"#9CA3AF",marginTop:8}}>Generated {fmtDate(s.generatedAt)} · based on {s.reviewCount} reviews</div>
+                </>
+              )}
+              {!s&&!isLoading&&!err&&(
+                <div style={{fontSize:12,color:"#9CA3AF",padding:"10px 0"}}>Click Analyse to generate an AI summary of this property's reviews.</div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -443,96 +726,63 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
   function setTA(f,v){setLc(c=>({...c,tripadvisor:{...c.tripadvisor,[f]:v}}));}
   function setTALoc(pid,v){setLc(c=>({...c,tripadvisor:{...c.tripadvisor,locations:{...c.tripadvisor.locations,[pid]:v}}}));}
   function setBK(f,v){setLc(c=>({...c,booking:{...c.booking,[f]:v}}));}
-  function setBKHotel(pid,v){setLc(c=>({...c,booking:{...c.booking,hotels:{...c.booking.hotels,[pid]:v}}}));}
+  function setBKH(pid,v){setLc(c=>({...c,booking:{...c.booking,hotels:{...c.booking.hotels,[pid]:v}}}));}
 
   async function searchTA(propId,propName){
-    const k=config.tripadvisor?.apiKey||lc.tripadvisor?.apiKey;
+    const k=lc.tripadvisor?.apiKey;
     if(!k){alert("Enter the TripAdvisor API key first.");return;}
     setSearching(s=>({...s,[propId]:true}));
     try{
       const res=await fetch(`${TA_BASE}/location/search?key=${k}&searchQuery=${encodeURIComponent(propName)}&category=hotels&language=en`,{headers:{accept:"application/json"}});
-      const d=await res.json();
-      setSrResults(r=>({...r,[propId]:d.data||[]}));
+      const d=await res.json();setSrResults(r=>({...r,[propId]:d.data||[]}));
     }catch(e){alert("Search failed: "+e.message);}
     finally{setSearching(s=>({...s,[propId]:false}));}
   }
 
-  function save(){
-    setConfig(lc);
-    onClose();
-    setTimeout(onFetch,300);
-  }
-
-  const TABS=["tripadvisor","booking","guide"];
-  const tabLabel={tripadvisor:"TripAdvisor",booking:"Booking.com",guide:"API Guide"};
+  function save(){setConfig(lc);onClose();setTimeout(onFetch,300);}
   const inp={width:"100%",padding:"8px 11px",border:"1px solid #D1D5DB",borderRadius:8,fontSize:13,outline:"none"};
+  const TABS=["tripadvisor","booking","ai","guide"];
+  const TLABEL={tripadvisor:"TripAdvisor",booking:"Booking.com",ai:"AI / Claude",guide:"API Guide"};
 
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:700,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
-
-        {/* header */}
         <div style={{padding:"18px 24px 0",borderBottom:"1px solid #E5E7EB"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <span style={{fontSize:15,fontWeight:700}}>Review Platform Settings</span>
-            <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9CA3AF",lineHeight:1}}>✕</button>
+            <span style={{fontSize:15,fontWeight:700}}>Settings</span>
+            <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#9CA3AF"}}>✕</button>
           </div>
           <div style={{display:"flex",gap:0,borderBottom:"2px solid #E5E7EB",marginBottom:-2}}>
-            {TABS.map(t=>(
-              <button key={t} onClick={()=>setTab(t)}
-                style={{padding:"8px 16px",border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:500,
-                  color:tab===t?"#0F5C4C":"#6B7280",
-                  borderBottom:tab===t?"2px solid #0F5C4C":"2px solid transparent",marginBottom:-2}}>
-                {tabLabel[t]}
-              </button>
-            ))}
+            {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"8px 15px",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:500,color:tab===t?"#0F5C4C":"#6B7280",borderBottom:tab===t?"2px solid #0F5C4C":"2px solid transparent",marginBottom:-2}}>{TLABEL[t]}</button>)}
           </div>
         </div>
-
-        {/* body */}
         <div style={{padding:"20px 24px",overflowY:"auto",flex:1}}>
 
-          {/* ── TripAdvisor tab ── */}
           {tab==="tripadvisor"&&(
             <div>
               <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:5,color:"#374151"}}>Content API Key</label>
-              <input value={lc.tripadvisor.apiKey} onChange={e=>setTA("apiKey",e.target.value)}
-                placeholder="Paste your API key…" style={inp}/>
-              <div style={{fontSize:11,color:"#6B7280",margin:"4px 0 20px"}}>
-                Apply at <a href="https://developer-tripadvisor.com/content-api/" target="_blank" rel="noopener noreferrer" style={{color:"#0F5C4C"}}>developer-tripadvisor.com</a> — free tier gives 5,000 calls/month and 5 reviews per property per fetch.
-              </div>
-
-              <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:8}}>Property → TripAdvisor Location IDs</div>
-              <div style={{fontSize:11,color:"#6B7280",marginBottom:12}}>Find the ID in your property's TripAdvisor URL: <code style={{background:"#F3F4F6",padding:"1px 4px",borderRadius:3}}>.../Hotel_Review-...-d<b style={{color:"#0F5C4C"}}>XXXXXXX</b>-...</code> — or use Search below.</div>
-
+              <input value={lc.tripadvisor.apiKey} onChange={e=>setTA("apiKey",e.target.value)} placeholder="Paste your API key…" style={inp}/>
+              <div style={{fontSize:11,color:"#6B7280",margin:"4px 0 18px"}}>Get a free key at <a href="https://developer-tripadvisor.com/content-api/" target="_blank" rel="noopener noreferrer" style={{color:"#0F5C4C"}}>developer-tripadvisor.com</a> — 5,000 free calls/month.</div>
+              <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:6}}>Property → TripAdvisor Location IDs</div>
+              <div style={{fontSize:11,color:"#6B7280",marginBottom:10}}>Find in TripAdvisor URL: <code style={{background:"#F3F4F6",padding:"1px 4px",borderRadius:3}}>.../Hotel_Review-...-d<b>XXXXXXX</b>-...</code> or use Search.</div>
               {ALL_PROPS.map(prop=>{
-                const locId=lc.tripadvisor.locations[prop.id]||"";
-                const res=srResults[prop.id]||[];
-                const isSearching=searching[prop.id];
+                const locId=lc.tripadvisor.locations[prop.id]||"";const res=srResults[prop.id]||[];const isSrch=searching[prop.id];
                 return(
-                  <div key={prop.id} style={{marginBottom:8,padding:"10px 12px",border:"1px solid #E5E7EB",borderRadius:8}}>
+                  <div key={prop.id} style={{marginBottom:7,padding:"9px 11px",border:"1px solid #E5E7EB",borderRadius:8}}>
                     <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                      <span style={{fontSize:12,fontWeight:500,color:"#374151",width:165,flexShrink:0}}>{prop.name}</span>
-                      <input value={locId} onChange={e=>setTALoc(prop.id,e.target.value)}
-                        placeholder="Location ID…"
-                        style={{flex:1,padding:"6px 9px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"}}/>
-                      <button onClick={()=>searchTA(prop.id,prop.name)} disabled={isSearching}
-                        style={{padding:"6px 10px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:6,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",opacity:isSearching?.6:1}}>
-                        {isSearching?"…":"Search"}
-                      </button>
+                      <span style={{fontSize:12,fontWeight:500,color:"#374151",width:155,flexShrink:0}}>{prop.name}</span>
+                      <input value={locId} onChange={e=>setTALoc(prop.id,e.target.value)} placeholder="Location ID…" style={{flex:1,padding:"5px 8px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"}}/>
+                      <button onClick={()=>searchTA(prop.id,prop.name)} disabled={isSrch} style={{padding:"5px 9px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:6,fontSize:11,cursor:"pointer",opacity:isSrch?.6:1}}>{isSrch?"…":"Search"}</button>
                     </div>
                     {res.length>0&&(
-                      <div style={{marginTop:6}}>
+                      <div style={{marginTop:5}}>
                         {res.slice(0,4).map(r=>(
-                          <button key={r.location_id}
-                            onClick={()=>{setTALoc(prop.id,String(r.location_id));setSrResults(x=>({...x,[prop.id]:[]}));}}
-                            style={{display:"block",width:"100%",textAlign:"left",padding:"5px 8px",border:"1px solid #E5E7EB",borderRadius:5,marginBottom:3,fontSize:11,cursor:"pointer",background:"#F9FAFB",color:"#374151"}}>
+                          <button key={r.location_id} onClick={()=>{setTALoc(prop.id,String(r.location_id));setSrResults(x=>({...x,[prop.id]:[]}));}}
+                            style={{display:"block",width:"100%",textAlign:"left",padding:"4px 7px",border:"1px solid #E5E7EB",borderRadius:5,marginBottom:2,fontSize:11,cursor:"pointer",background:"#F9FAFB",color:"#374151"}}>
                             <b style={{color:"#0F5C4C"}}>{r.location_id}</b> — {r.name}, {r.address_obj?.city||""}, {r.address_obj?.country||""}
                           </button>
                         ))}
-                        <button onClick={()=>setSrResults(x=>({...x,[prop.id]:[]}))}
-                          style={{fontSize:10,color:"#9CA3AF",background:"none",border:"none",cursor:"pointer",padding:"2px 0"}}>clear results</button>
+                        <button onClick={()=>setSrResults(x=>({...x,[prop.id]:[]}))} style={{fontSize:10,color:"#9CA3AF",background:"none",border:"none",cursor:"pointer",padding:"2px 0"}}>clear</button>
                       </div>
                     )}
                   </div>
@@ -541,50 +791,50 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
             </div>
           )}
 
-          {/* ── Booking.com tab ── */}
           {tab==="booking"&&(
             <div>
-              <div style={{background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,padding:"10px 13px",marginBottom:16,fontSize:12,color:"#92400E"}}>
-                <b>Note (June 2026):</b> Booking.com credential-based auth was sunset Dec 31 2025. The reviews API now requires OAuth 2.0 and cannot be called directly from the browser (CORS). A lightweight CORS proxy (Cloudflare Worker / Vercel function) is required. Contact your Booking.com connectivity partner manager for OAuth credentials.
-              </div>
-              {[["username","API Username","booking_user"],["password","Password","••••••••"],["proxyUrl","CORS Proxy URL","https://your-proxy.vercel.app/booking"]].map(([f,label,ph])=>(
-                <div key={f} style={{marginBottom:14}}>
-                  <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:5,color:"#374151"}}>{label}</label>
+              <div style={{background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"#92400E"}}><b>Note:</b> Booking.com credential auth was sunset Dec 2025. Requires OAuth 2.0 + CORS proxy. Contact your partner manager for credentials.</div>
+              {[["username","API Username","booking_user"],["password","Password","••••••••"],["proxyUrl","CORS Proxy URL","https://your-proxy.example.com"]].map(([f,label,ph])=>(
+                <div key={f} style={{marginBottom:13}}>
+                  <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:4,color:"#374151"}}>{label}</label>
                   <input type={f==="password"?"password":"text"} value={lc.booking[f]||""} onChange={e=>setBK(f,e.target.value)} placeholder={ph} style={inp}/>
                 </div>
               ))}
-              <div style={{fontWeight:600,fontSize:13,color:"#374151",margin:"20px 0 8px"}}>Property → Booking.com Hotel IDs</div>
+              <div style={{fontWeight:600,fontSize:13,color:"#374151",margin:"16px 0 8px"}}>Property → Booking.com Hotel IDs</div>
               {ALL_PROPS.map(prop=>(
-                <div key={prop.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:7}}>
-                  <span style={{fontSize:12,fontWeight:500,color:"#374151",width:165,flexShrink:0}}>{prop.name}</span>
-                  <input value={lc.booking.hotels[prop.id]||""} onChange={e=>setBKHotel(prop.id,e.target.value)}
-                    placeholder="Hotel ID…" style={{flex:1,padding:"6px 9px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"}}/>
+                <div key={prop.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                  <span style={{fontSize:12,fontWeight:500,color:"#374151",width:155,flexShrink:0}}>{prop.name}</span>
+                  <input value={lc.booking.hotels[prop.id]||""} onChange={e=>setBKH(prop.id,e.target.value)} placeholder="Hotel ID…" style={{flex:1,padding:"5px 8px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"}}/>
                 </div>
               ))}
             </div>
           )}
 
-          {/* ── API Guide tab ── */}
+          {tab==="ai"&&(
+            <div>
+              <div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:12,color:"#166534"}}>
+                AI Insights uses <b>Claude claude-3-5-haiku-20241022</b> (Anthropic) to generate per-property summaries from your review text. Costs ~$0.001 per property analysis. Summaries are cached in your browser until you regenerate.
+              </div>
+              <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:5,color:"#374151"}}>Anthropic API Key</label>
+              <input type="password" value={lc.anthropicKey||""} onChange={e=>setLc(c=>({...c,anthropicKey:e.target.value}))} placeholder="sk-ant-…" style={inp}/>
+              <div style={{fontSize:11,color:"#6B7280",marginTop:4}}>Get your key at <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" style={{color:"#0F5C4C"}}>console.anthropic.com</a>. The key is stored only in your browser (localStorage).</div>
+            </div>
+          )}
+
           {tab==="guide"&&(
             <div>
               {[
-                {name:"TripAdvisor",icon:"✅",status:"Full API — browser direct",
-                  text:"Apply for a free Content API key at developer-tripadvisor.com. Free tier: 5,000 calls/month, 5 reviews per property per request. You'll need each property's location ID (found in the URL or via the Search button above)."},
-                {name:"Booking.com",icon:"🔧",status:"API exists — needs proxy + OAuth",
-                  text:"Connectivity partners have access to the reviews API, but as of Jan 2026 only OAuth 2.0 auth is supported and the API blocks browser calls (no CORS). Set up a 10-line Cloudflare Worker or Vercel Edge function as a proxy. Contact your Booking.com partner manager for OAuth credentials."},
-                {name:"Airbnb",icon:"⚠️",status:"No public API",
-                  text:"Airbnb's Hospitality API is restricted to approved Platform Partners (large PMS vendors). Individual hosts cannot access it. Use the '+ Airbnb' button to manually log reviews copied from your host dashboard."},
-                {name:"Agoda",icon:"⚠️",status:"No public reviews API",
-                  text:"The YCS partner portal manages pricing and availability but does not expose a public reviews API. Manual import is the only option."},
-                {name:"MakeMyTrip",icon:"⚠️",status:"No public API",
-                  text:"The Connect by MakeMyTrip partner app displays reviews but has no developer API. Reviews can be copied and imported manually."},
-                {name:"Goibibo",icon:"⚠️",status:"No public API",
-                  text:"Same group as MakeMyTrip — no public reviews API. Use manual import."},
+                {name:"TripAdvisor",icon:"✅",status:"Full API — browser direct",text:"Free Content API key from developer-tripadvisor.com. 5,000 calls/month free, 5 most recent reviews per property per fetch. Reviews accumulate in Firestore across refreshes."},
+                {name:"Booking.com",icon:"🔧",status:"API exists — needs proxy + OAuth",text:"Reviews API available for connectivity partners. Credential auth sunset Dec 2025; now needs OAuth 2.0 + CORS proxy (Cloudflare Worker or Vercel function). Contact your Booking.com partner manager."},
+                {name:"Airbnb",icon:"⚠️",status:"No public API",text:"No public reviews API. Use '+ Airbnb' import button to add reviews manually from your host dashboard."},
+                {name:"Agoda",icon:"⚠️",status:"No public API",text:"Partner portal shows reviews but no API. Manual import available."},
+                {name:"MakeMyTrip",icon:"⚠️",status:"No public API",text:"Connect by MakeMyTrip portal shows reviews without API access. Manual import available."},
+                {name:"Goibibo",icon:"⚠️",status:"No public API",text:"Same group as MakeMyTrip. Manual import available."},
+                {name:"Firestore sync",icon:"🔥",status:"Auto-accumulates across devices",text:"Every time you refresh, new reviews are saved to Firestore under the 'reviews' collection. Over time this builds a rich historical dataset for analytics even with the free TA tier (5 reviews/fetch)."},
               ].map(p=>(
-                <div key={p.name} style={{marginBottom:12,padding:"12px 14px",border:"1px solid #E5E7EB",borderRadius:8}}>
-                  <div style={{display:"flex",gap:8,alignItems:"baseline",marginBottom:4}}>
-                    <span style={{fontSize:14}}>{p.icon}</span>
-                    <span style={{fontWeight:600,fontSize:13}}>{p.name}</span>
+                <div key={p.name} style={{marginBottom:10,padding:"11px 13px",border:"1px solid #E5E7EB",borderRadius:8}}>
+                  <div style={{display:"flex",gap:7,alignItems:"baseline",marginBottom:3}}>
+                    <span>{p.icon}</span><span style={{fontWeight:600,fontSize:13}}>{p.name}</span>
                     <span style={{fontSize:11,color:"#6B7280",marginLeft:"auto"}}>{p.status}</span>
                   </div>
                   <div style={{fontSize:12,color:"#6B7280",lineHeight:1.6}}>{p.text}</div>
@@ -592,10 +842,7 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
               ))}
             </div>
           )}
-
         </div>
-
-        {/* footer */}
         <div style={{padding:"14px 24px",borderTop:"1px solid #E5E7EB",display:"flex",justifyContent:"flex-end",gap:10}}>
           <button onClick={onClose} style={{padding:"8px 16px",border:"1px solid #D1D5DB",borderRadius:8,background:"#fff",cursor:"pointer",fontSize:13}}>Cancel</button>
           <button onClick={save} style={{padding:"8px 20px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>Save & Refresh</button>
@@ -609,71 +856,57 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
 function ImportModal({platform,config,setConfig,onClose}){
   const[propId,setPropId]=useState("");
   const[rows,setRows]=useState([{rating:5,title:"",text:"",author:"",date:new Date().toISOString().slice(0,10)}]);
-
   function upd(i,f,v){setRows(r=>r.map((x,j)=>j===i?{...x,[f]:v}:x));}
-  function add(){setRows(r=>[...r,{rating:5,title:"",text:"",author:"",date:new Date().toISOString().slice(0,10)}]);}
-  function rm(i){setRows(r=>r.filter((_,j)=>j!==i));}
-
   function save(){
     if(!propId){alert("Select a property.");return;}
     const prop=ALL_PROPS.find(p=>p.id===propId);
     const newRevs=rows.filter(r=>r.text.trim()||r.title.trim()).map((r,i)=>({
       id:`${platform.id}_manual_${Date.now()}_${i}`,
-      platform:platform.id,platformName:platform.name,
-      propertyId:propId,propertyName:prop?.name||propId,
-      rating:Number(r.rating),title:r.title,text:r.text,
-      author:r.author||"Guest",authorLocation:"",
-      date:r.date,tripType:"",url:"",language:"en",
+      platform:platform.id,platformName:platform.name,propertyId:propId,propertyName:prop?.name||propId,
+      rating:Number(r.rating),title:r.title,text:r.text,author:r.author||"Guest",authorLocation:"",date:r.date,tripType:"",url:"",language:"en",
     }));
     if(!newRevs.length){alert("Add at least one review with some text.");return;}
     const k=`${platform.id}_${propId}`;
     setConfig(c=>({...c,manual:{...(c.manual||{}),[k]:[...(c.manual?.[k]||[]),...newRevs]}}));
+    // Also save to Firestore
+    fsSave(platform.id,propId,newRevs).catch(()=>{});
     onClose();
   }
-
-  const inp={padding:"6px 9px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"};
-
+  const inp={padding:"6px 8px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"};
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:580,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
-        <div style={{padding:"18px 22px",borderBottom:"1px solid #E5E7EB",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontWeight:700,fontSize:14}}>Import {platform.name} Reviews</div>
-            <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>Reviews are saved locally on this device</div>
-          </div>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
+        <div style={{padding:"16px 20px",borderBottom:"1px solid #E5E7EB",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:700,fontSize:14}}>Import {platform.name} Reviews</div><div style={{fontSize:11,color:"#6B7280",marginTop:1}}>Saved to Firestore — visible on all devices</div></div>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"}}>✕</button>
         </div>
-        <div style={{padding:"16px 22px",overflowY:"auto",flex:1}}>
-          <div style={{marginBottom:14}}>
-            <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:5,color:"#374151"}}>Property</label>
-            <select value={propId} onChange={e=>setPropId(e.target.value)}
-              style={{width:"100%",...inp,padding:"8px 10px"}}>
-              <option value="">Select property…</option>
+        <div style={{padding:"14px 20px",overflowY:"auto",flex:1}}>
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:4,color:"#374151"}}>Property</label>
+            <select value={propId} onChange={e=>setPropId(e.target.value)} style={{width:"100%",...inp,padding:"8px 10px"}}>
+              <option value="">Select…</option>
               {ALL_PROPS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           {rows.map((r,i)=>(
-            <div key={i} style={{border:"1px solid #E5E7EB",borderRadius:8,padding:"12px",marginBottom:10}}>
-              <div style={{display:"flex",gap:7,marginBottom:7,alignItems:"center",flexWrap:"wrap"}}>
+            <div key={i} style={{border:"1px solid #E5E7EB",borderRadius:8,padding:"10px",marginBottom:8}}>
+              <div style={{display:"flex",gap:6,marginBottom:6,alignItems:"center",flexWrap:"wrap"}}>
                 <select value={r.rating} onChange={e=>upd(i,"rating",Number(e.target.value))} style={inp}>
                   {[5,4,3,2,1].map(n=><option key={n} value={n}>{"★".repeat(n)} {n}/5</option>)}
                 </select>
                 <input type="date" value={r.date} onChange={e=>upd(i,"date",e.target.value)} style={{...inp,flex:1}}/>
                 <input value={r.author} onChange={e=>upd(i,"author",e.target.value)} placeholder="Guest name" style={{...inp,flex:1}}/>
-                {rows.length>1&&<button onClick={()=>rm(i)} style={{background:"none",border:"none",cursor:"pointer",color:"#EF4444",fontSize:18,lineHeight:1}}>✕</button>}
+                {rows.length>1&&<button onClick={()=>setRows(r=>r.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:"#EF4444",fontSize:16}}>✕</button>}
               </div>
-              <input value={r.title} onChange={e=>upd(i,"title",e.target.value)} placeholder="Title (optional)"
-                style={{...inp,width:"100%",marginBottom:6}}/>
-              <textarea value={r.text} onChange={e=>upd(i,"text",e.target.value)} placeholder="Review text…" rows={3}
-                style={{...inp,width:"100%",resize:"vertical"}}/>
+              <input value={r.title} onChange={e=>upd(i,"title",e.target.value)} placeholder="Title (optional)" style={{...inp,width:"100%",marginBottom:5}}/>
+              <textarea value={r.text} onChange={e=>upd(i,"text",e.target.value)} placeholder="Review text…" rows={3} style={{...inp,width:"100%",resize:"vertical"}}/>
             </div>
           ))}
-          <button onClick={add} style={{width:"100%",padding:"8px",border:"1px dashed #D1D5DB",borderRadius:8,background:"none",cursor:"pointer",fontSize:13,color:"#6B7280"}}>+ Add another review</button>
+          <button onClick={()=>setRows(r=>[...r,{rating:5,title:"",text:"",author:"",date:new Date().toISOString().slice(0,10)}])} style={{width:"100%",padding:"7px",border:"1px dashed #D1D5DB",borderRadius:7,background:"none",cursor:"pointer",fontSize:12,color:"#6B7280"}}>+ Add review</button>
         </div>
-        <div style={{padding:"14px 22px",borderTop:"1px solid #E5E7EB",display:"flex",justifyContent:"flex-end",gap:10}}>
-          <button onClick={onClose} style={{padding:"8px 16px",border:"1px solid #D1D5DB",borderRadius:8,background:"#fff",cursor:"pointer",fontSize:13}}>Cancel</button>
-          <button onClick={save} style={{padding:"8px 20px",background:platform.color,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>Save Reviews</button>
+        <div style={{padding:"13px 20px",borderTop:"1px solid #E5E7EB",display:"flex",justifyContent:"flex-end",gap:8}}>
+          <button onClick={onClose} style={{padding:"7px 14px",border:"1px solid #D1D5DB",borderRadius:7,background:"#fff",cursor:"pointer",fontSize:13}}>Cancel</button>
+          <button onClick={save} style={{padding:"7px 16px",background:platform.color,color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:600}}>Save Reviews</button>
         </div>
       </div>
     </div>
@@ -685,26 +918,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 <script>
 function __runApp(){
   var root=document.getElementById("root");
-  try{
-    root.innerHTML="";
-    var src=document.getElementById("app-src").textContent;
-    var compiled=Babel.transform(src,{presets:[["react",{runtime:"classic"}]]}).code;
-    eval(compiled);
-  }catch(e){
-    root.innerHTML='<div style="padding:24px;font-family:sans-serif;color:#B91C1C;background:#FEF2F2;min-height:100vh"><strong>App failed to load.</strong><br><br><small style="font-family:monospace">'+e.message+"</small></div>";
-    console.error("Bootstrap error:",e);
-  }
+  try{root.innerHTML="";var src=document.getElementById("app-src").textContent;var compiled=Babel.transform(src,{presets:[["react",{runtime:"classic"}]]}).code;eval(compiled);}
+  catch(e){root.innerHTML='<div style="padding:24px;font-family:sans-serif;color:#B91C1C;background:#FEF2F2;min-height:100vh"><b>App failed to load.</b><br><br><small style="font-family:monospace">'+e.message+"</small></div>";console.error("Bootstrap:",e);}
 }
-function __waitBabel(n){
-  if(window.Babel){__runApp();}
-  else if(n>0){setTimeout(function(){__waitBabel(n-1);},300);}
-  else{document.getElementById("root").innerHTML="<div style='padding:24px;font-family:sans-serif'>Could not load Babel. Check your connection and refresh.</div>";}
-}
-if(document.readyState==="loading"){
-  document.addEventListener("DOMContentLoaded",function(){__waitBabel(20);});
-}else{
-  __waitBabel(20);
-}
+function __waitBabel(n){if(window.Babel){__runApp();}else if(n>0){setTimeout(function(){__waitBabel(n-1);},300);}else{document.getElementById("root").innerHTML="<div style='padding:24px;font-family:sans-serif'>Could not load Babel.</div>";}}
+if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",function(){__waitBabel(20);});}else{__waitBabel(20);}
 </script>
 </body>
 </html>
