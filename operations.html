@@ -325,8 +325,7 @@ const LOCATIONS=[
     {id:"mussoorie",name:"Mussoorie",type:"Boutique Villa",rooms:["Red Red Wine","White Room","Purple Room","Wooden Room","Blue Moon","Yellow Room","Orange Room"]}]},
   {id:"palampur",name:"Palampur",icon:"🍃",state:"Himachal Pradesh",properties:[
     {id:"two-stones",name:"Two Stones",type:"Heritage Bungalow",rooms:["Pukhraj","Panna","Neelam","Gomed"]},
-    {id:"red-cedar",name:"Red Cedar Cottage",type:"Cottage",rooms:["Red Cedar Cottage"]},
-    {id:"one-love",name:"One Love",type:"Property",rooms:["Patanga","Jugnu","Titli","Bhanwra","RCC"]},
+    {id:"one-love",name:"One Love",type:"Property",rooms:["Patanga","Jugnu","Titli","Bhanwra","Red Cedar Cottage"]},
     {id:"tea-estate",name:"Tea Estate",type:"Resort",rooms:["Blue Berry","Hibiscus","Macha","Butterfly","Saffron","Berry","Early Grey","Kafir Lime","Lavender","Peppermint","Herbal","Black Tea","Oolong"]}]},
   {id:"ramgarh",name:"Ramgarh",icon:"🌿",state:"Uttarakhand",properties:[
     {id:"cliffs-edge",name:"Cliffs Edge",type:"Resort",rooms:["Vasant","Grishma","Varsha","Hemant","Sharath","Shishir","Kartik","Simha","Megha"]},
@@ -362,7 +361,7 @@ const INV={
     "Assets":{subcats:{"Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","CCTV Recorder","UPS","Genset","Invertor","Invertor Battery","Batteries","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","Solar Panels"]}}
   },
 };
-["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","falling-cashews","cliffs-edge","red-cedar"].forEach(pid=>{
+["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","falling-cashews","cliffs-edge"].forEach(pid=>{
   INV[pid]={
     "Room Inventory":{rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
     "Housekeeping":{subcats:{
@@ -470,7 +469,6 @@ const PM_LOGINS={
   "beach-house":{pin:"BH2026"},
   "falling-cashews":{pin:"FC2026"},
   "cliffs-edge":{pin:"CE2026"},
-  "red-cedar":{pin:"RC2026"},
   "hampi-1800":{pin:"HM2026"},
 };
 const OFFICE_PIN="OFF2026";
