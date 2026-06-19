@@ -226,18 +226,14 @@ function avg(arr){return arr.length?arr.reduce((s,x)=>s+x,0)/arr.length:0;}
 
 /* ═══════════════════════ APP ═══════════════════════ */
 function App(){
-  const[config,setConfig]=useLS("seclude_reviews_config",()=>{
-    try{
-      const s=localStorage.getItem("seclude_reviews_config");
-      const saved=s?JSON.parse(s):null;
-      if(!saved)return INIT_CONFIG;
-      // Merge new defaults into existing saved config without overwriting user edits
-      return{...INIT_CONFIG,...saved,
-        google:{...INIT_CONFIG.google,...saved.google,
-          apiKey:saved.google?.apiKey||DEFAULT_GOOGLE_KEY,
-          places:{...DEFAULT_PLACES,...(saved.google?.places||{})}}};
-    }catch{return INIT_CONFIG;}
-  });
+  const[config,setConfig]=useLS("seclude_reviews_config",INIT_CONFIG);
+  // One-time migration: always merge latest default Place IDs + API key into saved config
+  useEffect(()=>{
+    setConfig(c=>({...c,google:{...c.google,
+      apiKey:c.google?.apiKey||DEFAULT_GOOGLE_KEY,
+      places:{...DEFAULT_PLACES,...(c.google?.places||{})}
+    }}));
+  },[]);
   const[allReviews,setAllReviews]=useState([]);
   const[stats,setStats]=useState({});
   const[loading,setLoading]=useState({});
