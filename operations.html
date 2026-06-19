@@ -1325,12 +1325,26 @@ function HQReports({proc,exp}){
 /* ══ ROOT ═══════════════════════════════════════════════════ */
 function App(){
   const[session,setSession]=useState(()=>{
-    try{const s=localStorage.getItem('seclude_ops_session');return s?JSON.parse(s):null;}
-    catch{return null;}
+    try{
+      const ls=localStorage.getItem('seclude_ops_session');
+      if(ls)return JSON.parse(ls);
+      const ss=sessionStorage.getItem('seclude_ops_session');
+      if(ss)return JSON.parse(ss);
+    }catch{}
+    return null;
   });
   const _origSetSession=setSession;
-  function handleLogin(s){localStorage.setItem('seclude_ops_session',JSON.stringify(s));_origSetSession(s);}
-  function handleLogout(){localStorage.removeItem('seclude_ops_session');_origSetSession(null);}
+  function handleLogin(s){
+    const js=JSON.stringify(s);
+    try{localStorage.setItem('seclude_ops_session',js);}catch{}
+    try{sessionStorage.setItem('seclude_ops_session',js);}catch{}
+    _origSetSession(s);
+  }
+  function handleLogout(){
+    try{localStorage.removeItem('seclude_ops_session');}catch{}
+    try{sessionStorage.removeItem('seclude_ops_session');}catch{}
+    _origSetSession(null);
+  }
   const[checks,setChecks]=useLS("seclude_checks",()=>{
     const base={};
     for(const[pid,areas] of Object.entries(SEED_2026_03)){
@@ -1352,6 +1366,11 @@ function App(){
   });
   const[photos,setPhotos]=useLS("seclude_photos",{});
   const[requests,setRequests]=useLS("seclude_requests",[]);
+  // Keep session alive in sessionStorage so reload never loses PM/HQ state
+  useEffect(()=>{
+    if(session){const js=JSON.stringify(session);try{localStorage.setItem('seclude_ops_session',js);}catch{}try{sessionStorage.setItem('seclude_ops_session',js);}catch{}}
+    else{try{localStorage.removeItem('seclude_ops_session');}catch{}try{sessionStorage.removeItem('seclude_ops_session');}catch{}}
+  },[session]);
   useEffect(()=>{
     if(localStorage.getItem("seclude_seeded_v4"))return;
     const now=new Date();
