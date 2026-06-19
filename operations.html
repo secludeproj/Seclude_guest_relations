@@ -1238,7 +1238,7 @@ function HQPurchases({proc,setProc}){
         </div>
       </div>
       <div className="prop-tabs">{usedProps.map(p=><button key={p} className={"prop-tab"+(propF===p?" on":"")} onClick={()=>setPropF(p)}>{p}</button>)}</div>
-      {showAdd&&<PurchaseFormRowf={form} upFn={upd} saveLabel="Add Order" onSave={()=>{if(!form.item||!form.property){alert("Item and Property required.");return;}setProc(p=>[...p,{...form,id:Date.now(),price:parseFloat(form.price)||0}]);setForm({});setShowAdd(false);}} onCancel={()=>setShowAdd(false)}/>}
+      {showAdd&&<PurchaseFormRow f={form} upFn={upd} saveLabel="Add Order" onSave={()=>{if(!form.item||!form.property){alert("Item and Property required.");return;}setProc(p=>[...p,{...form,id:Date.now(),price:parseFloat(form.price)||0}]);setForm({});setShowAdd(false);}} onCancel={()=>setShowAdd(false)}/>}
       <div className="card" style={{overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table className="ltbl">
