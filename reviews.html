@@ -50,6 +50,7 @@ const PLATFORMS=[
   {id:"agoda",      name:"Agoda",       color:"#EB3D4D",bg:"#FEE8EA",dark:"#A82A36",hasApi:false},
   {id:"makemytrip", name:"MakeMyTrip",  color:"#ED1C24",bg:"#FEE8E8",dark:"#A81218",hasApi:false},
   {id:"goibibo",    name:"Goibibo",     color:"#E73C7E",bg:"#FDE8F1",dark:"#A8285A",hasApi:false},
+  {id:"google",     name:"Google",      color:"#4285F4",bg:"#EAF1FB",dark:"#1A56DB",hasApi:true},
 ];
 const ALL_PROPS=[
   {id:"pangot-perch",    name:"Pangot Perch"},
@@ -71,7 +72,7 @@ const ALL_PROPS=[
 ];
 const TA_BASE="https://api.content.tripadvisor.com/api/v1";
 const STOP=new Set(["the","a","an","and","or","but","in","on","at","to","for","of","with","was","is","are","were","be","been","have","has","had","do","did","does","i","we","they","it","this","that","very","so","quite","really","just","also","would","could","should","will","our","their","your","my","its","us","them","there","from","by","not","no","as","if","what","when","which","who","how","more","most","some","all","than","then","her","his","she","he","me","him","one","two","get","got","our","can","its","too","any","may","but","yes","out","up","been","yet","say","now","new","old","good","great","nice","here","well"]);
-const INIT_CONFIG={tripadvisor:{apiKey:"",locations:{}},booking:{username:"",password:"",proxyUrl:"",hotels:{}},manual:{},anthropicKey:""};
+const INIT_CONFIG={tripadvisor:{apiKey:"",locations:{}},booking:{username:"",password:"",proxyUrl:"",hotels:{}},google:{apiKey:"",places:{}},manual:{},anthropicKey:""};
 
 /* ── utils ── */
 function useLS(key,init){
@@ -153,6 +154,31 @@ async function fetchBooking(hotelId,cfg,propId,propName){
   return{propId,platform:"booking",avgRating:0,reviewCount:0,reviews};
 }
 
+/* ── API: Google Places (v1) ── */
+async function fetchGoogle(placeId,apiKey,propId,propName){
+  // New Places API v1 — returns rating, userRatingCount, up to 5 reviews
+  const res=await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`,{
+    headers:{"X-Goog-Api-Key":apiKey,"X-Goog-FieldMask":"reviews,rating,userRatingCount,displayName","Content-Type":"application/json"}
+  });
+  if(!res.ok){const t=await res.text();throw new Error(`Google Places API ${res.status}: ${t.slice(0,120)}`);}
+  const data=await res.json();
+  const reviews=(data.reviews||[]).map((r,i)=>({
+    id:`google_${placeId}_${i}_${(r.publishTime||"").slice(0,10)}`,
+    platform:"google",platformName:"Google",
+    propertyId:propId,propertyName:propName,
+    rating:r.rating||0,
+    title:"",
+    text:r.text?.text||"",
+    author:r.authorAttribution?.displayName||"Guest",
+    authorLocation:"",
+    date:r.publishTime||"",
+    tripType:"",
+    url:r.googleMapsUri||"",
+    language:r.text?.languageCode||"en",
+  }));
+  return{propId,platform:"google",avgRating:data.rating||0,reviewCount:data.userRatingCount||0,reviews};
+}
+
 /* ── AI summary via Claude ── */
 async function genSummary(reviews,propName,apiKey){
   const text=reviews.slice(0,25).map(r=>`[${r.rating}★ — ${r.platform}] ${r.title?r.title+": ":""}${r.text||""}`).join("\n\n");
@@ -211,7 +237,9 @@ function App(){
     const taEntries=Object.entries(locs).filter(([,id])=>id);
     const bkHotels=config.booking?.hotels||{};
     const bkEntries=Object.entries(bkHotels).filter(([,id])=>id);
-    if(!taEntries.length&&!bkEntries.length)return;
+    const gPlaces=config.google?.places||{};
+    const gEntries=Object.entries(gPlaces).filter(([,id])=>id);
+    if(!taEntries.length&&!bkEntries.length&&!gEntries.length)return;
     setErrors({});
     const jobs=[
       ...taEntries.map(([propId,locationId])=>async()=>{
@@ -239,6 +267,18 @@ function App(){
           const r=await fetchBooking(hotelId,config.booking,propId,prop?.name||propId);
           setAllReviews(prev=>{const existIds=new Set(prev.map(x=>x.id));const fresh=r.reviews.filter(x=>!existIds.has(x.id));return fresh.length?[...prev,...fresh]:prev;});
           await fsSave("booking",propId,r.reviews);
+        }catch(e){setErrors(er=>({...er,[k]:e.message}));}
+        finally{setLoading(l=>({...l,[k]:false}));}
+      }),
+      ...gEntries.map(([propId,placeId])=>async()=>{
+        const prop=ALL_PROPS.find(p=>p.id===propId);
+        const k=`google_${propId}`;
+        setLoading(l=>({...l,[k]:true}));
+        try{
+          const r=await fetchGoogle(placeId,config.google.apiKey,propId,prop?.name||propId);
+          setStats(s=>({...s,[k]:{avgRating:r.avgRating,reviewCount:r.reviewCount}}));
+          setAllReviews(prev=>{const existIds=new Set(prev.map(x=>x.id));const fresh=r.reviews.filter(x=>!existIds.has(x.id));return fresh.length?[...prev,...fresh]:prev;});
+          await fsSave("google",propId,r.reviews);
         }catch(e){setErrors(er=>({...er,[k]:e.message}));}
         finally{setLoading(l=>({...l,[k]:false}));}
       }),
@@ -719,7 +759,7 @@ function AIInsights({reviews,config,setConfig}){
 /* ── Settings modal ── */
 function SettingsModal({config,setConfig,onClose,onFetch}){
   const[tab,setTab]=useState("tripadvisor");
-  const[lc,setLc]=useState(()=>JSON.parse(JSON.stringify({...INIT_CONFIG,...config,tripadvisor:{...INIT_CONFIG.tripadvisor,...config.tripadvisor,locations:{...(config.tripadvisor?.locations||{})}},booking:{...INIT_CONFIG.booking,...config.booking,hotels:{...(config.booking?.hotels||{})}}})));
+  const[lc,setLc]=useState(()=>JSON.parse(JSON.stringify({...INIT_CONFIG,...config,tripadvisor:{...INIT_CONFIG.tripadvisor,...config.tripadvisor,locations:{...(config.tripadvisor?.locations||{})}},booking:{...INIT_CONFIG.booking,...config.booking,hotels:{...(config.booking?.hotels||{})}},google:{...INIT_CONFIG.google,...config.google,places:{...(config.google?.places||{})}}})));
   const[searching,setSearching]=useState({});
   const[srResults,setSrResults]=useState({});
 
@@ -741,8 +781,8 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
 
   function save(){setConfig(lc);onClose();setTimeout(onFetch,300);}
   const inp={width:"100%",padding:"8px 11px",border:"1px solid #D1D5DB",borderRadius:8,fontSize:13,outline:"none"};
-  const TABS=["tripadvisor","booking","ai","guide"];
-  const TLABEL={tripadvisor:"TripAdvisor",booking:"Booking.com",ai:"AI / Claude",guide:"API Guide"};
+  const TABS=["tripadvisor","google","booking","ai","guide"];
+  const TLABEL={tripadvisor:"TripAdvisor",google:"Google",booking:"Booking.com",ai:"AI / Claude",guide:"API Guide"};
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -791,6 +831,26 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
             </div>
           )}
 
+          {tab==="google"&&(
+            <div>
+              <div style={{background:"#EAF1FB",border:"1px solid #93C5FD",borderRadius:8,padding:"10px 13px",marginBottom:16,fontSize:12,color:"#1E3A5F"}}>
+                Uses the <b>Google Places API (v1)</b>. Enable "Places API (New)" in your Google Cloud Console. The free tier includes $200/month credit (~5,000 place detail requests). Each property costs 1 request per Refresh.
+              </div>
+              <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:5,color:"#374151"}}>Google Cloud API Key</label>
+              <input value={lc.google.apiKey} onChange={e=>setLc(c=>({...c,google:{...c.google,apiKey:e.target.value}}))} placeholder="AIza…" style={inp}/>
+              <div style={{fontSize:11,color:"#6B7280",margin:"4px 0 18px"}}>Get your key at <a href="https://console.cloud.google.com/apis/library/places-backend.googleapis.com" target="_blank" rel="noopener noreferrer" style={{color:"#1A56DB"}}>Google Cloud Console</a> → Enable "Places API (New)" → Credentials → Create API Key.</div>
+              <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:6}}>Property → Google Place IDs</div>
+              <div style={{fontSize:11,color:"#6B7280",marginBottom:10}}>Find your Place ID at <a href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder" target="_blank" rel="noopener noreferrer" style={{color:"#1A56DB"}}>Place ID Finder</a> — search for your property name and copy the ID (starts with "ChIJ…").</div>
+              {ALL_PROPS.map(prop=>(
+                <div key={prop.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:7}}>
+                  <span style={{fontSize:12,fontWeight:500,color:"#374151",width:155,flexShrink:0}}>{prop.name}</span>
+                  <input value={lc.google.places[prop.id]||""} onChange={e=>setLc(c=>({...c,google:{...c.google,places:{...c.google.places,[prop.id]:e.target.value}}}))}
+                    placeholder="ChIJ…" style={{flex:1,padding:"5px 8px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"}}/>
+                </div>
+              ))}
+            </div>
+          )}
+
           {tab==="booking"&&(
             <div>
               <div style={{background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"#92400E"}}><b>Note:</b> Booking.com credential auth was sunset Dec 2025. Requires OAuth 2.0 + CORS proxy. Contact your partner manager for credentials.</div>
@@ -825,6 +885,7 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
             <div>
               {[
                 {name:"TripAdvisor",icon:"✅",status:"Full API — browser direct",text:"Free Content API key from developer-tripadvisor.com. 5,000 calls/month free, 5 most recent reviews per property per fetch. Reviews accumulate in Firestore across refreshes."},
+                {name:"Google",icon:"✅",status:"Full API — browser direct",text:"Uses the new Google Places API (v1). Enable 'Places API (New)' in Google Cloud Console, create an API key, then paste each property's Place ID (ChIJ…) in the Google tab. Returns up to 5 most recent reviews + official star rating and total review count. $200/month free credit (~5,000 requests)."},
                 {name:"Booking.com",icon:"🔧",status:"API exists — needs proxy + OAuth",text:"Reviews API available for connectivity partners. Credential auth sunset Dec 2025; now needs OAuth 2.0 + CORS proxy (Cloudflare Worker or Vercel function). Contact your Booking.com partner manager."},
                 {name:"Airbnb",icon:"⚠️",status:"No public API",text:"No public reviews API. Use '+ Airbnb' import button to add reviews manually from your host dashboard."},
                 {name:"Agoda",icon:"⚠️",status:"No public API",text:"Partner portal shows reviews but no API. Manual import available."},

@@ -338,6 +338,8 @@ const LOCATIONS=[
     {id:"bantony-cottage",name:"Bantony Cottage",type:"Heritage Resort",rooms:["Palash","Brijraj","Peepal Tree","Shamsher","Raanitaal","Sirmur Suite","Prakash","Maharaja","Maharani"]}]},
   {id:"pangot",name:"Pangot",icon:"🦜",state:"Uttarakhand",properties:[
     {id:"pangot-perch",name:"Pangot Perch",type:"Boutique Resort",rooms:["Blackbird","Blue Dasher","Butterfly","Dragonfly","Fireflies","Grasshopper","Ladybird","Queen Bee"]}]},
+  {id:"hampi",name:"Hampi",icon:"🪨",state:"Karnataka",properties:[
+    {id:"hampi-1800",name:"Hampi 1800",type:"Heritage Resort",location:"Sandur, Karnataka",rooms:["Sugriva Red","Tungabhadra Blue","Bazaar Yellow","Kishkindha Green","Lotus Pink","Matanga Purple"]}]},
 ];
 const ALL_PROPS=LOCATIONS.flatMap(l=>l.properties.map(p=>({...p,location:p.location||l.name,locationId:l.id,locationName:l.name,locIcon:l.icon})));
 
@@ -360,7 +362,7 @@ const INV={
     "Assets":{subcats:{"Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","CCTV Recorder","UPS","Genset","Invertor","Invertor Battery","Batteries","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","Solar Panels"]}}
   },
 };
-["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas"].forEach(pid=>{
+["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800"].forEach(pid=>{
   INV[pid]={
     "Room Inventory":{rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
     "Housekeeping":{subcats:{
@@ -469,7 +471,9 @@ const PM_LOGINS={
   "falling-cashews":{pin:"FC2026"},
   "cliffs-edge":{pin:"CE2026"},
   "red-cedar":{pin:"RC2026"},
+  "hampi-1800":{pin:"HM2026"},
 };
+const OFFICE_PIN="OFF2026";
 const HQ_USERS=[
   {id:1,name:"Rishita Narwal",email:"admin@seclude.in",password:"seclude@admin",role:"Admin"},
   {id:2,name:"Ops Manager",email:"ops@seclude.in",password:"seclude@ops",role:"Manager"},
@@ -507,15 +511,20 @@ function Login({onLogin}){
   const[pmProp,setPmProp]=useState("");
   const[pmName,setPmName]=useState("");
   const[pmPin,setPmPin]=useState("");
+  const[offName,setOffName]=useState("");
+  const[offPin,setOffPin]=useState("");
   const[err,setErr]=useState("");
+  const modeLabel={hq:"HQ Operations",pm:"Property Manager",office:"Office Storage"};
+  const modeSub={hq:"Sign in to the operations portal",pm:"Monthly checks & requests",office:"Manage head office inventory"};
   return(
     <div className="login-bg"><div className="login-box">
       <img src="https://seclude.in/wp-content/themes/seclude/images/seclude-logo.png" alt="Seclude" className="login-logo" onError={e=>{e.target.style.display="none";}}/>
-      <div className="login-h">{mode==="hq"?"HQ Operations":"Property Manager"}</div>
-      <div className="login-s">{mode==="hq"?"Sign in to the operations portal":"Monthly checks & requests"}</div>
+      <div className="login-h">{modeLabel[mode]}</div>
+      <div className="login-s">{modeSub[mode]}</div>
       <div className="modetabs">
         <button className={"modetab"+(mode==="hq"?" on":"")} onClick={()=>{setMode("hq");setErr("");}}>HQ Team</button>
         <button className={"modetab"+(mode==="pm"?" on":"")} onClick={()=>{setMode("pm");setErr("");}}>Property Manager</button>
+        <button className={"modetab"+(mode==="office"?" on":"")} onClick={()=>{setMode("office");setErr("");}}>Office Storage</button>
       </div>
       {mode==="hq"
         ?<form onSubmit={e=>{e.preventDefault();const u=HQ_USERS.find(x=>x.email===email.trim()&&x.password===pass);u?onLogin({type:"hq",user:u}):setErr("Invalid credentials.");}}>
@@ -542,7 +551,20 @@ function Login({onLogin}){
           <div className="fi"><label>Property PIN</label><input type="password" value={pmPin} onChange={e=>setPmPin(e.target.value)} placeholder="Enter PIN" required/></div>
           {err&&<div className="err">{err}</div>}
           <button className="btn-main" type="submit">Open Dashboard →</button>
-        </form>}
+        </form>
+        :mode==="office"&&(
+          <form onSubmit={e=>{
+            e.preventDefault();
+            if(!offName.trim()){setErr("Enter your name.");return;}
+            if(offPin.trim()!==OFFICE_PIN){setErr("Incorrect PIN. Contact HQ.");return;}
+            onLogin({type:"office",submitter:offName.trim()});
+          }}>
+            <div className="fi"><label>Your Name</label><input value={offName} onChange={e=>setOffName(e.target.value)} placeholder="Enter your name" required/></div>
+            <div className="fi"><label>Office PIN</label><input type="password" value={offPin} onChange={e=>setOffPin(e.target.value)} placeholder="Enter PIN" required/></div>
+            {err&&<div className="err">{err}</div>}
+            <button className="btn-main" type="submit">Open Office Storage →</button>
+          </form>
+        )}
     </div></div>
   );
 }
@@ -1642,6 +1664,161 @@ function HQReports({proc,exp}){
 }
 
 /* ══ ROOT ═══════════════════════════════════════════════════ */
+/* ══ OFFICE STORAGE ══════════════════════════════════════ */
+function OfficeStorage({session,onLogout,officeItems,setOfficeItems}){
+  const cats=Object.keys(officeItems);
+  const[selCat,setSelCat]=useState(()=>cats[0]||null);
+  const[showAddCat,setShowAddCat]=useState(false);
+  const[newCat,setNewCat]=useState("");
+  useEffect(()=>{if(!selCat&&cats.length>0)setSelCat(cats[0]);},[cats.length]);
+
+  function addCategory(){
+    const name=newCat.trim();
+    if(!name)return;
+    if(officeItems[name]){alert("Category already exists.");return;}
+    setOfficeItems(prev=>({...prev,[name]:[]}));
+    setSelCat(name);setNewCat("");setShowAddCat(false);
+  }
+  function delCategory(cat){
+    if(!window.confirm(`Delete "${cat}" and all its items?`))return;
+    setOfficeItems(prev=>{const n={...prev};delete n[cat];return n;});
+    setSelCat(cats.filter(c=>c!==cat)[0]||null);
+  }
+  function addItem(){
+    if(!selCat)return;
+    setOfficeItems(prev=>({...prev,[selCat]:[...(prev[selCat]||[]),{id:Date.now()+"",name:"",qty:"",notes:""}]}));
+  }
+  function updItem(idx,field,val){
+    setOfficeItems(prev=>({...prev,[selCat]:prev[selCat].map((x,i)=>i===idx?{...x,[field]:val}:x)}));
+  }
+  function delItem(idx){
+    setOfficeItems(prev=>({...prev,[selCat]:prev[selCat].filter((_,i)=>i!==idx)}));
+  }
+
+  const items=selCat?(officeItems[selCat]||[]):[];
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden",background:"var(--stone,#FAF8F4)"}}>
+      {/* Header */}
+      <div className="pm-header" style={{display:"flex",alignItems:"center",gap:10,padding:"14px 20px",background:"var(--g3,#091f17)",flexShrink:0}}>
+        <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+          <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
+        </svg>
+        <div style={{color:"rgba(255,255,255,.65)",fontSize:".82rem",flex:1,marginLeft:10}}>Office Storage · {session.submitter}</div>
+        <button className="pm-exit" onClick={onLogout}>Exit ✕</button>
+      </div>
+
+      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        {/* Sidebar */}
+        <div style={{width:210,background:"#fff",borderRight:"1px solid var(--line,#E4E4E7)",display:"flex",flexDirection:"column",flexShrink:0}}>
+          <div style={{padding:"14px 14px 8px",fontWeight:700,fontSize:12,color:"var(--ink2,#52525B)",letterSpacing:.4}}>CATEGORIES</div>
+          <div style={{flex:1,overflowY:"auto",padding:"0 8px 8px"}}>
+            {cats.map(cat=>(
+              <div key={cat} onClick={()=>setSelCat(cat)}
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",borderRadius:7,marginBottom:2,cursor:"pointer",background:selCat===cat?"var(--gl,#E8F3F0)":"transparent",color:selCat===cat?"var(--g,#0F5C4C)":"var(--ink2,#52525B)",fontWeight:selCat===cat?600:400,fontSize:13}}>
+                <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cat}</span>
+                <button onClick={e=>{e.stopPropagation();delCategory(cat);}}
+                  style={{background:"none",border:"none",cursor:"pointer",color:"var(--ink3,#A1A1AA)",fontSize:14,padding:"0 0 0 4px",lineHeight:1,flexShrink:0}}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={{padding:"8px 10px 12px",borderTop:"1px solid var(--line,#E4E4E7)"}}>
+            {showAddCat?(
+              <div style={{display:"flex",gap:5}}>
+                <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Category name…"
+                  onKeyDown={e=>e.key==="Enter"&&addCategory()}
+                  style={{flex:1,padding:"6px 8px",border:"1px solid var(--ld,#D4D4D8)",borderRadius:6,fontSize:12,outline:"none"}} autoFocus/>
+                <button onClick={addCategory} style={{padding:"6px 9px",background:"var(--g,#0F5C4C)",color:"#fff",border:"none",borderRadius:6,fontSize:12,cursor:"pointer"}}>+</button>
+                <button onClick={()=>setShowAddCat(false)} style={{padding:"6px 8px",background:"none",border:"1px solid var(--ld,#D4D4D8)",borderRadius:6,fontSize:12,cursor:"pointer"}}>✕</button>
+              </div>
+            ):(
+              <button onClick={()=>setShowAddCat(true)}
+                style={{width:"100%",padding:"7px 10px",background:"none",border:"1px dashed var(--ld,#D4D4D8)",borderRadius:7,cursor:"pointer",fontSize:12,color:"var(--ink2,#52525B)"}}>
+                + Add Category
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Main panel */}
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {selCat?(
+            <>
+              <div style={{padding:"16px 20px 10px",borderBottom:"1px solid var(--line,#E4E4E7)",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#fff",flexShrink:0}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:"1rem",color:"var(--ink,#18181B)"}}>{selCat}</div>
+                  <div style={{fontSize:12,color:"var(--ink3,#A1A1AA)",marginTop:2}}>{items.length} item{items.length!==1?"s":""}</div>
+                </div>
+                <button onClick={addItem}
+                  style={{padding:"7px 14px",background:"var(--g,#0F5C4C)",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>
+                  + Add Item
+                </button>
+              </div>
+              <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+                {items.length===0?(
+                  <div style={{textAlign:"center",padding:"48px 0",color:"var(--ink3,#A1A1AA)"}}>
+                    <div style={{fontSize:32,marginBottom:10}}>📦</div>
+                    <div style={{fontWeight:600,fontSize:14,color:"var(--ink2,#52525B)",marginBottom:4}}>No items yet</div>
+                    <div style={{fontSize:12}}>Click "+ Add Item" to start tracking inventory in this category.</div>
+                  </div>
+                ):(
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead>
+                      <tr style={{background:"var(--sm,#F0EBE3)"}}>
+                        {["Item Name","Quantity","Notes",""].map(h=>(
+                          <th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:11,fontWeight:700,color:"var(--ink2,#52525B)",letterSpacing:.4,borderBottom:"2px solid var(--sd,#E0D5C8)",whiteSpace:"nowrap"}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item,idx)=>(
+                        <tr key={item.id||idx} style={{borderBottom:"1px solid var(--line,#E4E4E7)"}}>
+                          <td style={{padding:"6px 8px",width:"38%"}}>
+                            <input value={item.name} onChange={e=>updItem(idx,"name",e.target.value)}
+                              placeholder="Item name…"
+                              style={{width:"100%",padding:"5px 8px",border:"1px solid transparent",borderRadius:5,fontSize:13,outline:"none",background:"transparent"}}
+                              onFocus={e=>e.target.style.border="1px solid var(--g2,#1B7A5E)"}
+                              onBlur={e=>e.target.style.border="1px solid transparent"}/>
+                          </td>
+                          <td style={{padding:"6px 8px",width:"15%"}}>
+                            <input type="number" value={item.qty} onChange={e=>updItem(idx,"qty",e.target.value)}
+                              placeholder="0"
+                              style={{width:"100%",padding:"5px 8px",border:"1px solid transparent",borderRadius:5,fontSize:13,outline:"none",background:"transparent",textAlign:"center"}}
+                              onFocus={e=>e.target.style.border="1px solid var(--g2,#1B7A5E)"}
+                              onBlur={e=>e.target.style.border="1px solid transparent"}/>
+                          </td>
+                          <td style={{padding:"6px 8px"}}>
+                            <input value={item.notes} onChange={e=>updItem(idx,"notes",e.target.value)}
+                              placeholder="Notes…"
+                              style={{width:"100%",padding:"5px 8px",border:"1px solid transparent",borderRadius:5,fontSize:13,outline:"none",background:"transparent"}}
+                              onFocus={e=>e.target.style.border="1px solid var(--g2,#1B7A5E)"}
+                              onBlur={e=>e.target.style.border="1px solid transparent"}/>
+                          </td>
+                          <td style={{padding:"6px 4px",textAlign:"center",width:32}}>
+                            <button onClick={()=>delItem(idx)}
+                              style={{background:"none",border:"none",cursor:"pointer",color:"var(--ink3,#A1A1AA)",fontSize:15,lineHeight:1,padding:"2px 4px"}}
+                              title="Delete row">✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          ):(
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:10,color:"var(--ink3,#A1A1AA)"}}>
+              <div style={{fontSize:40}}>📦</div>
+              <div style={{fontWeight:600,fontSize:14,color:"var(--ink2,#52525B)"}}>No categories yet</div>
+              <div style={{fontSize:12}}>Use the sidebar to add your first category (e.g. Stationery, Electronics, Furniture).</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App(){
   const[session,setSession]=useState(()=>{
     try{
@@ -1687,6 +1864,7 @@ function App(){
   const[requests,setRequests]=useFirestore("seclude_requests",[],500);
   const[customItems,setCustomItems]=useFirestore("seclude_custom_items",{},1000);
   const[proc,setProc]=useFirestore("seclude_proc_v2",INIT_PROC,500);
+  const[officeItems,setOfficeItems]=useFirestore("seclude_office_items",{},1000);
   // Keep session alive in sessionStorage so reload never loses PM/HQ state
   useEffect(()=>{
     if(session){const js=JSON.stringify(session);try{localStorage.setItem('seclude_ops_session',js);}catch{}try{sessionStorage.setItem('seclude_ops_session',js);}catch{}}
@@ -1722,6 +1900,7 @@ function App(){
   },[]);
   if(!session)return<Login onLogin={handleLogin}/>;
   if(session.type==="pm")return<PMPortal session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc}/>;
+  if(session.type==="office")return<OfficeStorage session={session} onLogout={handleLogout} officeItems={officeItems} setOfficeItems={setOfficeItems}/>;
   return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} proc={proc} setProc={setProc}/>;
 }
 
