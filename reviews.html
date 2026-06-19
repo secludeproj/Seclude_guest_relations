@@ -252,12 +252,15 @@ function App(){
     fsLoad().then(stored=>{if(stored.length)setAllReviews(stored);});
   },[]);
 
-  const fetchAll=useCallback(async()=>{
-    const locs=config.tripadvisor?.locations||{};
+  const fetchAll=useCallback(async(overrideConfig)=>{
+    const cfg=overrideConfig||config;
+    const locs=cfg.tripadvisor?.locations||{};
     const taEntries=Object.entries(locs).filter(([,id])=>id);
-    const bkHotels=config.booking?.hotels||{};
+    const bkHotels=cfg.booking?.hotels||{};
     const bkEntries=Object.entries(bkHotels).filter(([,id])=>id);
-    const gPlaces=config.google?.places||{};
+    // Always fall back to baked-in defaults so Google works even before migration effect settles
+    const gPlaces={...DEFAULT_PLACES,...(cfg.google?.places||{})};
+    const gApiKey=cfg.google?.apiKey||DEFAULT_GOOGLE_KEY;
     const gEntries=Object.entries(gPlaces).filter(([,id])=>id);
     if(!taEntries.length&&!bkEntries.length&&!gEntries.length)return;
     setErrors({});
@@ -267,9 +270,8 @@ function App(){
         const k=`ta_${propId}`;
         setLoading(l=>({...l,[k]:true}));
         try{
-          const r=await fetchTA(locationId,config.tripadvisor.apiKey,propId,prop?.name||propId);
+          const r=await fetchTA(locationId,cfg.tripadvisor.apiKey,propId,prop?.name||propId);
           setStats(s=>({...s,[k]:{avgRating:r.avgRating,reviewCount:r.reviewCount}}));
-          // Merge new reviews, deduplicated
           setAllReviews(prev=>{
             const existIds=new Set(prev.map(x=>x.id));
             const fresh=r.reviews.filter(x=>!existIds.has(x.id));
@@ -284,7 +286,7 @@ function App(){
         const k=`bk_${propId}`;
         setLoading(l=>({...l,[k]:true}));
         try{
-          const r=await fetchBooking(hotelId,config.booking,propId,prop?.name||propId);
+          const r=await fetchBooking(hotelId,cfg.booking,propId,prop?.name||propId);
           setAllReviews(prev=>{const existIds=new Set(prev.map(x=>x.id));const fresh=r.reviews.filter(x=>!existIds.has(x.id));return fresh.length?[...prev,...fresh]:prev;});
           await fsSave("booking",propId,r.reviews);
         }catch(e){setErrors(er=>({...er,[k]:e.message}));}
@@ -295,7 +297,7 @@ function App(){
         const k=`google_${propId}`;
         setLoading(l=>({...l,[k]:true}));
         try{
-          const r=await fetchGoogle(placeId,config.google.apiKey,propId,prop?.name||propId);
+          const r=await fetchGoogle(placeId,gApiKey,propId,prop?.name||propId);
           setStats(s=>({...s,[k]:{avgRating:r.avgRating,reviewCount:r.reviewCount}}));
           setAllReviews(prev=>{const existIds=new Set(prev.map(x=>x.id));const fresh=r.reviews.filter(x=>!existIds.has(x.id));return fresh.length?[...prev,...fresh]:prev;});
           await fsSave("google",propId,r.reviews);
@@ -306,7 +308,8 @@ function App(){
     await Promise.all(jobs.map(fn=>fn()));
   },[config]);
 
-  useEffect(()=>{if(hasTAKey)fetchAll();},[]);
+  // Auto-fetch on load using baked-in defaults (bypasses config race condition)
+  useEffect(()=>{fetchAll({...config,google:{apiKey:DEFAULT_GOOGLE_KEY,places:DEFAULT_PLACES}});},[]);
 
   // Merge manual reviews from config
   const reviews=useMemo(()=>{
