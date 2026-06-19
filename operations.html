@@ -838,8 +838,8 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
       {showReqForm&&<PMRequestForm session={session} onClose={()=>setShowReqForm(false)} onSubmit={req=>setRequests(prev=>[req,...(prev||[])])}/>}
       {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} onClose={()=>setShowInvForm(false)}/>}
       <div className="pm-header">
-        <svg height="26" viewBox="0 0 80 26" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
-          <text y="20" fontFamily="Georgia,serif" fontSize="18" fill="rgba(255,255,255,.88)" letterSpacing="2">SECLUDE</text>
+        <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+          <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
         </svg>
         <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:10}}>{session.propName} · {session.submitter}</div>
         <button className="btn-g" style={{padding:"6px 12px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E",marginRight:4}} onClick={()=>setShowInvForm(true)}>📦 Inventory Received</button>
