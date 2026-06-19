@@ -318,7 +318,8 @@ const LOCATIONS=[
   {id:"kerala",name:"Kerala",icon:"🌴",state:"Kerala",properties:[
     {id:"karthika-nivas",name:"Karthika Nivas",type:"Heritage Home",location:"Thrissur",rooms:["Tejas","Vayu","Akash","Prithvi","Apas"]},
     {id:"marari-sand",name:"Marari Sand",type:"Private Cottages",location:"Marari",rooms:["Royal Villa 1","Royal Villa 2","Royal Villa 3","Royal Villa 4","Royal Villa 5","Royal Villa 6","Premium Villa 1","Premium Villa 2","Premium Villa 3","Pool View 1","Pool View 2","Pool View 3","Pool View 4"]},
-    {id:"beach-house",name:"Beach House by the Lake",type:"Villa",location:"Alleppey",rooms:["Blue Villa","Sunrise Villa","Green Villa"]}]},
+    {id:"beach-house",name:"Beach House",type:"Beach House",location:"Kattoor Beach",rooms:["Pristine","Barefoot"]},
+    {id:"by-the-lake",name:"By the Lake",type:"Villa",location:"Alleppey",rooms:["Blue Villa","Sunrise Villa","Green Villa"]}]},
   {id:"kasauli",name:"Kasauli",icon:"🎸",state:"Himachal Pradesh",properties:[
     {id:"annies-song",name:"Annie's Song",type:"Resort",rooms:["Almost Heaven","Country Roads","Sleepy Blue","Silver Cloud","Night in the Forest","Starwood","This Old Guitar","Desert Rose","Fly Away","Frida Ka","Walk in the Rain"]}]},
   {id:"mussoorie",name:"Mussoorie",icon:"🏔",state:"Uttarakhand",properties:[
@@ -361,7 +362,7 @@ const INV={
     "Assets":{subcats:{"Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","CCTV Recorder","UPS","Genset","Invertor","Invertor Battery","Batteries","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","Solar Panels"]}}
   },
 };
-["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","falling-cashews","cliffs-edge"].forEach(pid=>{
+["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","by-the-lake","falling-cashews","cliffs-edge"].forEach(pid=>{
   INV[pid]={
     "Room Inventory":{rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
     "Housekeeping":{subcats:{
@@ -467,6 +468,7 @@ const PM_LOGINS={
   "karthika-nivas":{pin:"KN2026"},
   "marari-sand":{pin:"MR2026"},
   "beach-house":{pin:"BH2026"},
+  "by-the-lake":{pin:"BL2026"},
   "falling-cashews":{pin:"FC2026"},
   "cliffs-edge":{pin:"CE2026"},
   "hampi-1800":{pin:"HM2026"},
