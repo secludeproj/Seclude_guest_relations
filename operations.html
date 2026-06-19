@@ -112,8 +112,9 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
 .mon-label{font-family:var(--fh);font-size:1rem;font-weight:600;min-width:140px;text-align:center}
 
 .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
-.xl-wrap{overflow-x:auto;overflow-y:auto;border-radius:11px;border:1px solid var(--ld);background:var(--white);max-height:70vh;width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.xl-wrap{overflow-x:scroll;overflow-y:auto;border-radius:11px;border:1px solid var(--ld);background:var(--white);max-height:70vh;width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c5d0dc #f1f5f9}
 .xl-wrap::-webkit-scrollbar{width:7px;height:7px}
+.xl-wrap::-webkit-scrollbar-track{background:#f1f5f9}
 .xl-wrap::-webkit-scrollbar-thumb{background:#c5d0dc;border-radius:5px}
 .xl-tbl{border-collapse:collapse;font-size:.78rem;white-space:nowrap;table-layout:auto}
 .xl-tbl th,.xl-tbl td{border:1px solid #e2e8ef;padding:0;vertical-align:middle}
@@ -677,7 +678,9 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
     <div id="pm-wrap">
       {showReqForm&&<PMRequestForm session={session} onClose={()=>setShowReqForm(false)} onSubmit={req=>setRequests(prev=>[req,...(prev||[])])}/>}
       <div className="pm-header">
-        <img src="https://seclude.in/wp-content/themes/seclude/images/seclude-logo.png" alt="Seclude" className="pm-logo" onError={e=>e.target.style.display="none"}/>
+        <svg height="26" viewBox="0 0 80 26" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+          <text y="20" fontFamily="Georgia,serif" fontSize="18" fill="rgba(255,255,255,.88)" letterSpacing="2">SECLUDE</text>
+        </svg>
         <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:10}}>{session.propName} · {session.submitter}</div>
         <button className="btn-req" style={{padding:"6px 12px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
         <button className="pm-exit" style={{marginLeft:8}} onClick={onLogout}>Exit ✕</button>
