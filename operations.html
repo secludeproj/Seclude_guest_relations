@@ -715,7 +715,7 @@ function PMRequestForm({session,onClose,onSubmit}){
 }
 
 /* ══ INVENTORY RECEIVED MODAL ═══════════════════════════════ */
-function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,onClose}){
+function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,requests,setRequests,proc,setProc,onClose}){
   const propId=session.propId;
   const propInv=INV[propId]||{};
   const[selArea,setSelArea]=useState("Room Inventory");
@@ -726,19 +726,22 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,o
   const[qtyRec,setQtyRec]=useState("");
   const[room,setRoom]=useState("");
   const[vendor,setVendor]=useState("");
+  const[price,setPrice]=useState("");
+  const[invoiceNo,setInvoiceNo]=useState("");
+  const[linkedReqId,setLinkedReqId]=useState("");
   const[err,setErr]=useState("");
 
   const areaData=propInv[selArea]||{};
   const isRoom=selArea==="Room Inventory";
   const rooms=isRoom?(areaData.rooms||[]):[];
   const cItems=customItems&&customItems[propId]&&customItems[propId][selArea]||{};
-  // Merge INV subcats + custom subcats
   const subcatMap={...(areaData.subcats||{})};
   Object.entries(cItems).forEach(([sc,its])=>{subcatMap[sc]=[...new Set([...(subcatMap[sc]||[]),...its])];});
   const subcats=isRoom?[]:Object.keys(subcatMap);
   const subcatItems=selSubcat?(subcatMap[selSubcat]||[]):(isRoom?(areaData.items||[]):[]);
-  // all known items for datalist
   const allKnownItems=isRoom?(areaData.items||[]):Object.values(subcatMap).flat();
+  // Pending "Item Needed" requests for this property not yet linked to a receipt
+  const openReqs=(requests||[]).filter(r=>r.propId===propId&&r.type==="Item Needed"&&r.status!=="Resolved"&&!r.linkedReceiptId);
 
   function save(e){
     e.preventDefault();
@@ -749,31 +752,52 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,o
     const qty=parseFloat(qtyRec)||0;
     const mk=monthKey(new Date().getFullYear(),new Date().getMonth()+1);
     const rk=isRoom?(room||"Common Area"):"property";
+    const receiptId=Date.now();
 
-    // If new item, add to customItems
+    // Add to customItems if new
     if(isNew){
       setCustomItems(prev=>{
         const n=JSON.parse(JSON.stringify(prev||{}));
-        if(!n[propId])n[propId]={};
-        if(!n[propId][selArea])n[propId][selArea]={};
+        if(!n[propId])n[propId]={};if(!n[propId][selArea])n[propId][selArea]={};
         if(!n[propId][selArea][sc])n[propId][selArea][sc]=[];
         if(!n[propId][selArea][sc].includes(item))n[propId][selArea][sc].push(item);
         return n;
       });
     }
 
-    // Update checks qty (add to existing)
+    // Update inventory qty
     setChecks(prev=>{
       const n=JSON.parse(JSON.stringify(prev||{}));
-      if(!n[propId])n[propId]={};
-      if(!n[propId][selArea])n[propId][selArea]={};
-      if(!n[propId][selArea][rk])n[propId][selArea][rk]={};
-      if(!n[propId][selArea][rk][mk])n[propId][selArea][rk][mk]={};
+      if(!n[propId])n[propId]={};if(!n[propId][selArea])n[propId][selArea]={};
+      if(!n[propId][selArea][rk])n[propId][selArea][rk]={};if(!n[propId][selArea][rk][mk])n[propId][selArea][rk][mk]={};
       const cur=parseFloat(n[propId][selArea][rk][mk][item]?.qty)||0;
       if(!n[propId][selArea][rk][mk][item])n[propId][selArea][rk][mk][item]={damage:""};
       n[propId][selArea][rk][mk][item].qty=String(cur+qty);
       return n;
     });
+
+    // Create purchase entry if price given — ONE entry, linked to request if applicable
+    if(price){
+      const prop=ALL_PROPS.find(p=>p.id===propId);
+      setProc(prev=>{
+        // Dedup: if a purchase entry already exists linked to this request, don't create another
+        if(linkedReqId&&prev.some(p=>p.linkedRequestId===linkedReqId))return prev;
+        return[...prev,{
+          id:receiptId,purchaseDate:new Date().toISOString().slice(0,10),
+          item,qty,unitPrice:price/qty||"",price:parseFloat(price)||0,
+          vendor:vendor||"—",property:prop?.name||propId,
+          category:selArea,invoiceNo:invoiceNo||"",invoiceFile:null,notes:"",
+          sourceType:"inventory_received",linkedRequestId:linkedReqId||null,
+          addedBy:session.submitter,warranty:""
+        }];
+      });
+    }
+
+    // Auto-resolve linked request and mark receipt ID on it
+    if(linkedReqId){
+      setRequests(prev=>prev.map(r=>r.id===Number(linkedReqId)||r.id===linkedReqId
+        ?{...r,status:"Resolved",linkedReceiptId:receiptId}:r));
+    }
     onClose();
   }
 
@@ -795,7 +819,7 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,o
               </select>
             </div>}
           </div>
-          {!isRoom&&!selSubcat&&<div className="ff2" style={{marginBottom:10}}><label>New Category Name <span style={{color:"var(--ink3)",fontWeight:400}}>(if not listed above)</span></label><input value={newSubcat} onChange={e=>setNewSubcat(e.target.value)} placeholder="e.g. Cold Storage"/></div>}
+          {!isRoom&&!selSubcat&&<div className="ff2" style={{marginBottom:10}}><label>New Category Name</label><input value={newSubcat} onChange={e=>setNewSubcat(e.target.value)} placeholder="e.g. Cold Storage"/></div>}
           {isRoom&&<div className="ff2" style={{marginBottom:10}}><label>Room</label>
             <select value={room} onChange={e=>setRoom(e.target.value)}>
               <option value="">Common Area</option>
@@ -811,6 +835,17 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,o
             <div className="ff2"><label>Qty Received</label><input type="number" min="0" value={qtyRec} onChange={e=>setQtyRec(e.target.value)} placeholder="0" required/></div>
             <div className="ff2"><label>Vendor / Source</label><input value={vendor} onChange={e=>setVendor(e.target.value)} placeholder="e.g. HO Godown"/></div>
           </div>
+          <div className="fg" style={{marginBottom:10}}>
+            <div className="ff2"><label>Total Cost ₹ <span style={{color:"var(--ink3)",fontWeight:400}}>(optional — adds to Purchases)</span></label><input type="number" min="0" value={price} onChange={e=>setPrice(e.target.value)} placeholder="Leave blank if unknown"/></div>
+            <div className="ff2"><label>Invoice No.</label><input value={invoiceNo} onChange={e=>setInvoiceNo(e.target.value)} placeholder="e.g. INV-1023"/></div>
+          </div>
+          {openReqs.length>0&&<div className="ff2" style={{marginBottom:10}}>
+            <label>Link to Pending Request <span style={{color:"var(--ink3)",fontWeight:400}}>(prevents duplicate purchase entry)</span></label>
+            <select value={linkedReqId} onChange={e=>setLinkedReqId(e.target.value)}>
+              <option value="">— None —</option>
+              {openReqs.map(r=><option key={r.id} value={r.id}>{r.item} · {r.date} · {r.urgency}</option>)}
+            </select>
+          </div>}
           {err&&<div className="err">{err}</div>}
           <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
             <button type="button" className="btn btn-out btn-sm" onClick={onClose}>Cancel</button>
@@ -823,7 +858,7 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,o
 }
 
 /* ══ PM PORTAL ══════════════════════════════════════════════ */
-function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems}){
+function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc}){
   const[area,setArea]=useState("Room Inventory");
   const today=todayYMD();
   const[yr,setYr]=useState(today.y);
@@ -836,7 +871,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
   return(
     <div id="pm-wrap">
       {showReqForm&&<PMRequestForm session={session} onClose={()=>setShowReqForm(false)} onSubmit={req=>setRequests(prev=>[req,...(prev||[])])}/>}
-      {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} onClose={()=>setShowInvForm(false)}/>}
+      {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} requests={requests} setRequests={setRequests} proc={proc} setProc={setProc} onClose={()=>setShowInvForm(false)}/>}
       <div className="pm-header">
         <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
           <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
@@ -874,11 +909,10 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
 }
 
 /* ══ HQ APP ═════════════════════════════════════════════════ */
-function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems}){
+function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,proc,setProc}){
   const[page,setPage]=useState("dashboard");
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
-  const[proc,setProc]=useLS("seclude_proc_v2",INIT_PROC);
   const[exp,setExp]=useLS("seclude_exp",INIT_EXP);
   const[sideOpen,setSideOpen]=useState(false);
   const today=todayYMD();
@@ -946,7 +980,7 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
           {page==="dashboard"&&<HQDashboard requests={requests||[]} proc={proc} exp={exp} onNav={nav}/>}
           {page==="properties"&&!selProp&&<HQPropList onSelect={p=>nav("properties",{prop:p})}/>}
           {page==="properties"&&curProp&&<HQPropDetail prop={curProp} area={propArea} setArea={setPropArea} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} yr={yr} mn={mn} setYr={setYr} setMn={setMn} onBack={()=>setSelProp(null)} customItems={customItems}/>}
-          {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests}/>}
+          {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests} proc={proc} setProc={setProc}/>}
           {page==="purchases"&&<HQPurchases proc={proc} setProc={setProc}/>}
           {page==="expenses"&&<HQExpenses exp={exp} setExp={setExp}/>}
           {page==="reports"&&<HQReports proc={proc} exp={exp}/>}
@@ -1085,12 +1119,35 @@ function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn
 }
 
 /* ══ HQ REQUESTS ════════════════════════════════════════════ */
-function HQRequests({requests,setRequests}){
+function HQRequests({requests,setRequests,proc,setProc}){
   const[filter,setFilter]=useState("All");
+  const[purchaseForm,setPurchaseForm]=useState({}); // {reqId: {price,vendor,invoiceNo}}
   const statuses=["All","Pending","In Progress","Resolved"];
   const filtered=filter==="All"?requests:requests.filter(r=>r.status===filter);
-  function updStatus(id,s){setRequests(prev=>prev.map(r=>r.id===id?{...r,status:s}:r));}
   const stCols={"Pending":{bg:"#FEF9C3",c:"#92400E"},"In Progress":{bg:"#EFF6FF",c:"#1D4ED8"},"Resolved":{bg:"#DCFCE7",c:"#15803D"}};
+
+  function updStatus(id,s){
+    setRequests(prev=>prev.map(r=>r.id===id?{...r,status:s}:r));
+  }
+  function addPurchaseFromRequest(r,pf){
+    // Dedup: if already linked from PM's inventory received, skip
+    if(r.linkedReceiptId||(proc||[]).some(p=>p.linkedRequestId===r.id)){
+      setRequests(prev=>prev.map(x=>x.id===r.id?{...x,status:"Resolved"}:x));
+      setPurchaseForm(prev=>{const n={...prev};delete n[r.id];return n;});
+      return;
+    }
+    const newId=Date.now();
+    setProc(prev=>[...prev,{
+      id:newId,purchaseDate:new Date().toISOString().slice(0,10),
+      item:r.item,qty:parseFloat(r.qty)||1,price:parseFloat(pf.price)||0,
+      vendor:pf.vendor||"—",property:r.propName,category:r.area||"",
+      invoiceNo:pf.invoiceNo||"",invoiceFile:null,notes:"From request: "+r.description,
+      warranty:"",sourceType:"from_request",linkedRequestId:r.id,addedBy:"HQ"
+    }]);
+    setRequests(prev=>prev.map(x=>x.id===r.id?{...x,status:"Resolved",linkedReceiptId:newId}:x));
+    setPurchaseForm(prev=>{const n={...prev};delete n[r.id];return n;});
+  }
+
   return(
     <div>
       <div className="pg-title">Requests from Property Managers</div>
@@ -1105,21 +1162,50 @@ function HQRequests({requests,setRequests}){
         :filtered.map(r=>{
           const uc=stCols[r.status]||{bg:"#f3f4f6",c:"#6b7280"};
           const urgC=r.urgency==="Critical"?"#FEE2E2":r.urgency==="Urgent"?"#FEF9C3":"transparent";
+          const alreadyLinked=r.linkedReceiptId||(proc||[]).some(p=>p.linkedRequestId===r.id);
+          const pf=purchaseForm[r.id]||{};
           return<div key={r.id} style={{background:"var(--white)",border:"1px solid var(--line)",borderRadius:10,padding:"13px 15px",marginBottom:9,borderLeft:`4px solid ${r.urgency==="Critical"?"#b91c1c":r.urgency==="Urgent"?"#92400E":"var(--line)"}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
               <div style={{flex:1}}>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
                   <span className="req-badge" style={{background:r.type==="Damage Report"?"#FEF9C3":"var(--gl)",color:r.type==="Damage Report"?"#92400E":"var(--g)"}}>{r.type}</span>
                   <span className="req-badge" style={{background:urgC,color:r.urgency==="Critical"?"#b91c1c":r.urgency==="Urgent"?"#92400E":"var(--ink3)"}}>{r.urgency}</span>
+                  {alreadyLinked&&<span className="req-badge" style={{background:"#E8F3F0",color:"var(--g)"}}>✓ Purchase logged</span>}
                   <span style={{fontSize:".68rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>from {r.propName} · {r.submitter} · {r.date}</span>
                 </div>
                 <div style={{fontWeight:700,fontSize:".9rem",marginBottom:3}}>{r.item}{r.room?" — "+r.room:""} <span style={{fontWeight:400,color:"var(--ink3)",fontSize:".8rem"}}>({r.area})</span></div>
                 <div style={{fontSize:".8rem",color:"var(--ink2)"}}>{r.description}</div>
                 {r.qty&&<div style={{fontSize:".74rem",color:"var(--g)",marginTop:3}}>Quantity needed: {r.qty}</div>}
+                {/* Purchase form — only for Item Needed, when resolving, not already logged */}
+                {purchaseForm[r.id]!==undefined&&r.type==="Item Needed"&&!alreadyLinked&&(
+                  <div style={{marginTop:10,background:"var(--stone)",borderRadius:8,padding:"10px 12px",border:"1px solid var(--gl)"}}>
+                    <div style={{fontSize:".72rem",fontWeight:700,color:"var(--g)",marginBottom:7}}>Add to Purchases (optional)</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      <div className="ff2"><label>Total Cost ₹</label><input type="number" value={pf.price||""} onChange={e=>setPurchaseForm(p=>({...p,[r.id]:{...p[r.id],price:e.target.value}}))} placeholder="0"/></div>
+                      <div className="ff2"><label>Vendor</label><input value={pf.vendor||""} onChange={e=>setPurchaseForm(p=>({...p,[r.id]:{...p[r.id],vendor:e.target.value}}))} placeholder="Vendor"/></div>
+                      <div className="ff2"><label>Invoice No.</label><input value={pf.invoiceNo||""} onChange={e=>setPurchaseForm(p=>({...p,[r.id]:{...p[r.id],invoiceNo:e.target.value}}))} placeholder="INV-"/></div>
+                    </div>
+                    <div style={{display:"flex",gap:6,marginTop:8}}>
+                      <button type="button" className="btn btn-g btn-sm" onClick={()=>addPurchaseFromRequest(r,pf)}>✓ Confirm &amp; Resolve</button>
+                      <button type="button" className="btn btn-out btn-sm" onClick={()=>{updStatus(r.id,"Resolved");setPurchaseForm(p=>{const n={...p};delete n[r.id];return n;});}}>Resolve without purchase</button>
+                    </div>
+                  </div>
+                )}
+                {alreadyLinked&&r.status!=="Resolved"&&<div style={{fontSize:".72rem",color:"var(--g)",marginTop:6,background:"#E8F3F0",borderRadius:5,padding:"4px 8px"}}>PM already logged receipt — purchase entry exists. Just mark resolved.</div>}
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
                 <span className="req-badge" style={{background:uc.bg,color:uc.c,justifyContent:"center"}}>{r.status}</span>
-                <select value={r.status} onChange={e=>updStatus(r.id,e.target.value)} style={{border:"1px solid var(--line)",borderRadius:6,padding:"4px 7px",fontSize:".72rem",cursor:"pointer"}}>
+                <select value={r.status} onChange={e=>{
+                  const newStatus=e.target.value;
+                  if(newStatus==="Resolved"&&r.type==="Item Needed"&&!alreadyLinked){
+                    // Show purchase form instead of immediately resolving
+                    setPurchaseForm(p=>({...p,[r.id]:p[r.id]||{}}));
+                    updStatus(r.id,"Resolved");
+                  }else{
+                    updStatus(r.id,newStatus);
+                    if(newStatus!=="Resolved")setPurchaseForm(p=>{const n={...p};delete n[r.id];return n;});
+                  }
+                }} style={{border:"1px solid var(--line)",borderRadius:6,padding:"4px 7px",fontSize:".72rem",cursor:"pointer"}}>
                   <option>Pending</option><option>In Progress</option><option>Resolved</option>
                 </select>
               </div>
@@ -1541,6 +1627,7 @@ function App(){
   const[photos,setPhotos]=useLS("seclude_photos",{});
   const[requests,setRequests]=useLS("seclude_requests",[]);
   const[customItems,setCustomItems]=useLS("seclude_custom_items",{});
+  const[proc,setProc]=useLS("seclude_proc_v2",INIT_PROC);
   // Keep session alive in sessionStorage so reload never loses PM/HQ state
   useEffect(()=>{
     if(session){const js=JSON.stringify(session);try{localStorage.setItem('seclude_ops_session',js);}catch{}try{sessionStorage.setItem('seclude_ops_session',js);}catch{}}
@@ -1575,8 +1662,8 @@ function App(){
     localStorage.setItem("seclude_seeded_v4","1");
   },[]);
   if(!session)return<Login onLogin={handleLogin}/>;
-  if(session.type==="pm")return<PMPortal session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems}/>;
-  return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems}/>;
+  if(session.type==="pm")return<PMPortal session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc}/>;
+  return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} proc={proc} setProc={setProc}/>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
