@@ -380,19 +380,19 @@ const INV={
       "Cookware":["Pressure Cooker","Wok / Kadai","Pots & Pans Set","Baking Tray","Ladle Set","Mixing Bowls","Chopping Board","Knife Set","Colander","Strainer"],
       "Kitchen Store":["Storage Containers","Spice Rack","Water Filter","Cling Wrap","Aluminium Foil","Garbage Bags"]
     }},
+    "Assets":{subcats:{
+      "Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","Genset","Invertor","Invertor Battery","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","UPS","Solar Panels"]
+    }},
     "Others":{subcats:{
       "Activity":["Ludo","Chess","Carrom Board","Projector","Speaker","TT Table","Badminton Set","Sofa Set","Sofa Single"],
       "Reception":["Laptop","Printer","Paytm Machine","Reception Table","Reception Chair","Computer","Monitor","Card Machine"],
       "Restaurant":["Dining Table","Chairs","TV","AC & Remote","Sofa Set","Lights","Fan","Flower Vase","Table Cloth"],
       "Decorations":["Balloons","Fairy Lights","Candle Stand (Decor)","Flower Vase (Decor)","Happy Birthday Banner","Happy Anniversary Banner","Candle","Christmas Tree","Ferry Lanterns"]
-    }},
-    "Assets":{subcats:{
-      "Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","Genset","Invertor","Invertor Battery","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","UPS","Solar Panels"]
     }}
   };
 });
 
-const AREAS=["Room Inventory","Housekeeping","Dining","Kitchen","Others","Assets"];
+const AREAS=["Room Inventory","Housekeeping","Dining","Kitchen","Assets","Others"];
 const DMG={"":{ bg:"#F9FAFB",c:"#9CA3AF",sym:"—"},"OK":{bg:"#DCFCE7",c:"#15803D",sym:"✓"},"Damaged":{bg:"#FEF9C3",c:"#92400E",sym:"⚠"},"Missing":{bg:"#FEE2E2",c:"#B91C1C",sym:"✗"}};
 const DMG_CYCLE=["","OK","Damaged","Missing"];
 function nxtDmg(s){return DMG_CYCLE[(DMG_CYCLE.indexOf(s)+1)%DMG_CYCLE.length];}
