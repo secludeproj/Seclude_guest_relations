@@ -1827,7 +1827,7 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   const existingIds=new Set(existingBookings.map(b=>b.reservationId));
 
   // 1. New bookings — search by subject to catch both direct AND forwarded emails
-  const q=encodeURIComponent('subject:"Reservation Confirmation" after:2026/06/17');
+  const q=encodeURIComponent('subject:"Reservation Confirmation" after:2026/06/16');
   console.log('[GmailSync] query:',decodeURIComponent(q));
   const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=500`);
   console.log('[GmailSync] messages found:',list.messages?.length||0);
@@ -1840,12 +1840,24 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
       try{
         const att=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}/attachments/${attId}`);
         if(att.data){
-          // rfc822 attachment data is the raw RFC2822 email — extract readable text from it
           const raw=decodeGmailBody(att.data);
-          // grab any base64-encoded HTML block inside the raw message
+          // Try base64-encoded HTML block first
           const htmlBlock=raw.match(/Content-Type:\s*text\/html[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
-          if(htmlBlock){body+='\n'+htmlToText(decodeGmailBody(htmlBlock.replace(/\s/g,'')));}
-          else body+='\n'+raw.replace(/<[^>]+>/g,' ');
+          if(htmlBlock){
+            try{const decoded=decodeGmailBody(htmlBlock.replace(/\s/g,''));if(decoded.length>50){body+='\n'+htmlToText(decoded);}}
+            catch{}
+          }
+          // Try plain text block
+          const txtBlock=raw.match(/Content-Type:\s*text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
+          if(txtBlock){
+            try{
+              const isB64=/^[A-Za-z0-9+/\r\n]+=*\s*$/.test(txtBlock.trim());
+              const decoded=isB64?decodeGmailBody(txtBlock.replace(/\s/g,'')):txtBlock;
+              if(decoded.length>50)body+='\n'+decoded;
+            }catch{}
+          }
+          // Last resort: strip tags from raw
+          if(!htmlBlock&&!txtBlock)body+='\n'+raw.replace(/<[^>]+>/g,' ').replace(/\s{3,}/g,'\n');
         }
       }catch(e){console.warn('[GmailSync] attachment fetch failed',attId,e);}
     }
@@ -1867,7 +1879,7 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   }
 
   // 2. Cancellations — also by subject to catch forwarded cancellation emails
-  const qc=encodeURIComponent('subject:"Reservation Cancellation" after:2026/06/17');
+  const qc=encodeURIComponent('subject:"Reservation Cancellation" after:2026/06/16');
   const listC=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${qc}&maxResults=200`);
   for(const msg of listC.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
