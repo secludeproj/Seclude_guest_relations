@@ -10,6 +10,15 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+try{
+  firebase.initializeApp({apiKey:"AIzaSyCzbDofACiuSslCH2pVMZzNDfLLQa2_dYI",authDomain:"seclude-ops.firebaseapp.com",projectId:"seclude-ops",storageBucket:"seclude-ops.firebasestorage.app",messagingSenderId:"953422377072",appId:"1:953422377072:web:b49f5c7463c876b497c4b5"});
+  window.db=firebase.firestore();
+  console.log("[Seclude] Firestore connected ✓");
+}catch(e){console.warn("[Seclude] Firebase unavailable – falling back to localStorage only",e);}
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -398,6 +407,47 @@ function useLS(key,init){
   const[v,setV]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):(typeof init==="function"?init():init);}catch{return typeof init==="function"?init():init;}});
   useEffect(()=>{try{localStorage.setItem(key,JSON.stringify(v));}catch{}},[v,key]);
   return[v,setV];
+}
+/* Real-time Firestore sync hook – falls back to localStorage when offline.
+   Debounces writes to avoid hammering Firestore on rapid state changes.
+   When an incoming snapshot arrives (change from another device) it cancels
+   any pending local write so Firestore always wins as source of truth. */
+function useFirestore(key,init,debounceMs=1500){
+  const[v,setV]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):(typeof init==="function"?init():init);}catch{return typeof init==="function"?init():init;}});
+  const timerRef=useRef(null);
+  const pendingRef=useRef(null);
+  useEffect(()=>{
+    if(!window.db)return;
+    const unsub=window.db.collection("ops").doc(key).onSnapshot(snap=>{
+      if(snap.exists){
+        const data=snap.data().v;
+        // Cancel any queued local write – incoming data from another device takes priority
+        clearTimeout(timerRef.current);
+        pendingRef.current=null;
+        try{localStorage.setItem(key,JSON.stringify(data));}catch{}
+        setV(data);
+      }
+    },err=>console.warn("[FS listen]",key,err));
+    return()=>unsub();
+  },[key]);
+  function setVSync(valOrFn){
+    setV(prev=>{
+      const next=typeof valOrFn==="function"?valOrFn(prev):valOrFn;
+      try{localStorage.setItem(key,JSON.stringify(next));}catch{}
+      pendingRef.current=next;
+      clearTimeout(timerRef.current);
+      timerRef.current=setTimeout(()=>{
+        if(window.db&&pendingRef.current!==null){
+          window.db.collection("ops").doc(key)
+            .set({v:pendingRef.current,_ts:Date.now()})
+            .catch(e=>console.warn("[FS write]",key,e));
+          pendingRef.current=null;
+        }
+      },debounceMs);
+      return next;
+    });
+  }
+  return[v,setVSync];
 }
 
 /* ══ AUTH + INIT DATA ═══════════════════════════════════════ */
@@ -877,6 +927,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
           <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
         </svg>
         <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:10}}>{session.propName} · {session.submitter}</div>
+        {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,.55)",whiteSpace:"nowrap",marginRight:4}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
         <button className="btn-g" style={{padding:"6px 12px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E",marginRight:4}} onClick={()=>setShowInvForm(true)}>📦 Inventory Received</button>
         <button className="btn-req" style={{padding:"6px 12px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
         <button className="pm-exit" style={{marginLeft:8}} onClick={onLogout}>Exit ✕</button>
@@ -913,7 +964,7 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
   const[page,setPage]=useState("dashboard");
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
-  const[exp,setExp]=useLS("seclude_exp",INIT_EXP);
+  const[exp,setExp]=useFirestore("seclude_exp",INIT_EXP,500);
   const[sideOpen,setSideOpen]=useState(false);
   const today=todayYMD();
   const[yr,setYr]=useState(today.y);
@@ -971,7 +1022,11 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
             {page==="expenses"&&<><span>›</span><b>Expenses</b></>}
             {page==="reports"&&<><span>›</span><b>Reports</b></>}
           </div>
-          <a href="index.html" style={{marginLeft:"auto",fontSize:"12px",color:"var(--sage)",textDecoration:"none",display:"flex",alignItems:"center",gap:"5px",padding:"5px 10px",border:"1px solid var(--line)",borderRadius:"6px",whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"6px",fontSize:"11px",color:window.db?"#10B981":"#9CA3AF",flexShrink:0,whiteSpace:"nowrap"}}>
+            <span style={{width:"7px",height:"7px",borderRadius:"50%",background:window.db?"#10B981":"#D1D5DB",display:"inline-block",flexShrink:0}}/>
+            {window.db?"Live sync":"Local only"}
+          </span>
+          <a href="index.html" style={{fontSize:"12px",color:"var(--sage)",textDecoration:"none",display:"flex",alignItems:"center",gap:"5px",padding:"5px 10px",border:"1px solid var(--line)",borderRadius:"6px",whiteSpace:"nowrap",flexShrink:0}}>
             Guest Relations
             <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </a>
@@ -1605,7 +1660,7 @@ function App(){
     try{sessionStorage.removeItem('seclude_ops_session');}catch{}
     _origSetSession(null);
   }
-  const[checks,setChecks]=useLS("seclude_checks",()=>{
+  const[checks,setChecks]=useFirestore("seclude_checks",()=>{
     const base={};
     for(const[pid,areas] of Object.entries(SEED_2026_03)){
       base[pid]={};
@@ -1623,11 +1678,11 @@ function App(){
       }
     }
     return base;
-  });
+  },3000);
   const[photos,setPhotos]=useLS("seclude_photos",{});
-  const[requests,setRequests]=useLS("seclude_requests",[]);
-  const[customItems,setCustomItems]=useLS("seclude_custom_items",{});
-  const[proc,setProc]=useLS("seclude_proc_v2",INIT_PROC);
+  const[requests,setRequests]=useFirestore("seclude_requests",[],500);
+  const[customItems,setCustomItems]=useFirestore("seclude_custom_items",{},1000);
+  const[proc,setProc]=useFirestore("seclude_proc_v2",INIT_PROC,500);
   // Keep session alive in sessionStorage so reload never loses PM/HQ state
   useEffect(()=>{
     if(session){const js=JSON.stringify(session);try{localStorage.setItem('seclude_ops_session',js);}catch{}try{sessionStorage.setItem('seclude_ops_session',js);}catch{}}
