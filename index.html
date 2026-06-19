@@ -1872,7 +1872,7 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
   for(const msg of listC.messages||[]){
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
     const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
-    const body=extractPlainText(full.payload);
+    const {text:body}=extractPlainText(full.payload);
     const resId=parseDjuboCancellation(body,subject);
     if(resId)cancelled.push(resId);
   }
