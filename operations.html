@@ -362,7 +362,7 @@ const INV={
     "Assets":{subcats:{"Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","CCTV Recorder","UPS","Genset","Invertor","Invertor Battery","Batteries","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","Solar Panels"]}}
   },
 };
-["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800"].forEach(pid=>{
+["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","falling-cashews","cliffs-edge","red-cedar"].forEach(pid=>{
   INV[pid]={
     "Room Inventory":{rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
     "Housekeeping":{subcats:{
@@ -1150,10 +1150,10 @@ function HQPropList({onSelect}){
           </div>
           <div className="prop-grid">
             {loc.properties.map(p=>(
-              <div key={p.id} className={"prop-card"+(p.rooms.length===0?" prop-card-no-rooms":"")} onClick={()=>p.rooms.length>0&&onSelect(p.id)}>
+              <div key={p.id} className="prop-card" onClick={()=>onSelect(p.id)}>
                 <div className="prop-card-name">{p.name}</div>
                 <div className="prop-card-type">{p.type}</div>
-                <div className="prop-card-rooms">{p.rooms.length>0?`${p.rooms.length} rooms · ${p.rooms.slice(0,3).join(", ")}${p.rooms.length>3?" …":""}` :"Inventory not set up"}</div>
+                <div className="prop-card-rooms">{p.rooms.length>0?`${p.rooms.length} rooms · ${p.rooms.slice(0,3).join(", ")}${p.rooms.length>3?" …":""}` :"Inventory – qty to be updated"}</div>
               </div>
             ))}
           </div>
