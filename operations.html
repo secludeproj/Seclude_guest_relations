@@ -993,27 +993,11 @@ function InvoiceFileCell({rec,onChange}){
 
 /* ══ HQ PURCHASES ═══════════════════════════════════════════ */
 function todayISO(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
-function HQPurchases({proc,setProc}){
-  const[propF,setPropF]=useState("All");
-  const[showAdd,setShowAdd]=useState(false);
-  const[search,setSearch]=useState("");
-  const[form,setForm]=useState({purchaseDate:todayISO()});
-  const[editId,setEditId]=useState(null);
-  const[editForm,setEditForm]=useState({});
-  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const updE=(k,v)=>setEditForm(f=>({...f,[k]:v}));
-  const usedProps=["All",...[...new Set(proc.map(p=>p.property))].sort()];
-  const filtered=(propF==="All"?proc:proc.filter(p=>p.property===propF))
-    .filter(p=>!search||[p.item,p.vendor,p.property,p.invoiceNo,p.notes].join(" ").toLowerCase().includes(search.toLowerCase()));
-  const COLS=["Date of Purchase","Date of Receiving","Item","Price (₹)","Vendor","Property","Approved By","Warranty","Invoice No","Notes"];
 
-  function toRow(p){return{"Date of Purchase":p.purchaseDate,"Date of Receiving":p.receiveDate||"","Item":p.item,"Price (₹)":p.price||"","Vendor":p.vendor,"Property":p.property,"Approved By":p.approvedBy,"Warranty":p.warranty||"","Invoice No":p.invoiceNo||"","Notes":p.notes||""};}
-  function dlProp(){dlCSV(filtered.map(toRow),COLS,propF==="All"?"purchases_all.csv":"purchases_"+propF.replace(/ /g,"_")+".csv");}
-  function startEdit(p){setEditId(p.id);setEditForm({...p});}
-  function saveEdit(){setProc(prev=>prev.map(p=>p.id===editId?{...editForm}:p));setEditId(null);}
-  function delRow(id){if(window.confirm("Delete this entry?"))setProc(prev=>prev.filter(p=>p.id!==id));}
-
-  const FormRow=({f,upFn,onSave,onCancel,saveLabel="Save"})=>(
+// Lifted outside HQPurchases so React never unmounts it on re-render (focus bug fix)
+function PurchaseFormRow({f,upFn,onSave,onCancel,saveLabel="Save"}){
+  const calcPrice=(qty,unit)=>{const q=parseFloat(qty)||0;const u=parseFloat(unit)||0;return q&&u?q*u:"";};
+  return(
     <div className="form-inline">
       <div style={{fontSize:".72rem",color:"var(--ink2)",background:"var(--gl)",borderRadius:7,padding:"6px 12px",marginBottom:10}}>
         ℹ️ Enter <strong>one item per row</strong> — each item gets its own invoice and report entry.
@@ -1021,15 +1005,15 @@ function HQPurchases({proc,setProc}){
       <div className="fg t4" style={{marginBottom:10}}>
         <div className="ff2"><label>Date Purchased</label><input className="ff2 input" type="date" value={f.purchaseDate||""} onChange={e=>upFn("purchaseDate",e.target.value)}/></div>
         <div className="ff2"><label>Item Name</label><input value={f.item||""} onChange={e=>upFn("item",e.target.value)} placeholder="e.g. Bed Sheets" required/></div>
-        <div className="ff2"><label>Quantity</label><input type="number" value={f.qty||""} onChange={e=>{const q=parseFloat(e.target.value)||0;const u=parseFloat(f.unitPrice)||0;upFn("qty",e.target.value);upFn("price",q&&u?q*u:"");}} placeholder="e.g. 12"/></div>
-        <div className="ff2"><label>Unit Price (₹)</label><input type="number" value={f.unitPrice||""} onChange={e=>{const u=parseFloat(e.target.value)||0;const q=parseFloat(f.qty)||0;upFn("unitPrice",e.target.value);upFn("price",q&&u?q*u:"");}} placeholder="per piece"/></div>
+        <div className="ff2"><label>Quantity</label><input type="number" value={f.qty||""} onChange={e=>{upFn("qty",e.target.value);upFn("price",calcPrice(e.target.value,f.unitPrice));}} placeholder="e.g. 12"/></div>
+        <div className="ff2"><label>Unit Price (₹)</label><input type="number" value={f.unitPrice||""} onChange={e=>{upFn("unitPrice",e.target.value);upFn("price",calcPrice(f.qty,e.target.value));}} placeholder="per piece"/></div>
       </div>
       <div className="fg t4" style={{marginBottom:10}}>
         <div className="ff2"><label>Total Price (₹) <span style={{color:"var(--ink3)",fontWeight:400}}>(auto or override)</span></label><input type="number" value={f.price||""} onChange={e=>upFn("price",e.target.value)} placeholder="0"/></div>
         <div className="ff2"><label>Vendor</label><input value={f.vendor||""} onChange={e=>upFn("vendor",e.target.value)} placeholder="Vendor name"/></div>
         <div className="ff2"><label>Property</label>
           <select value={f.property||""} onChange={e=>upFn("property",e.target.value)}>
-            <option value="">— Select —</option><option>All</option>
+            <option value="">— Select —</option>
             {ALL_PROPS.map(p=><option key={p.id}>{p.name}</option>)}
           </select>
         </div>
@@ -1052,6 +1036,26 @@ function HQPurchases({proc,setProc}){
       </div>
     </div>
   );
+}
+function HQPurchases({proc,setProc}){
+  const[propF,setPropF]=useState("All");
+  const[showAdd,setShowAdd]=useState(false);
+  const[search,setSearch]=useState("");
+  const[form,setForm]=useState({purchaseDate:todayISO()});
+  const[editId,setEditId]=useState(null);
+  const[editForm,setEditForm]=useState({});
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const updE=(k,v)=>setEditForm(f=>({...f,[k]:v}));
+  const usedProps=["All",...[...new Set(proc.map(p=>p.property))].sort()];
+  const filtered=(propF==="All"?proc:proc.filter(p=>p.property===propF))
+    .filter(p=>!search||[p.item,p.vendor,p.property,p.invoiceNo,p.notes].join(" ").toLowerCase().includes(search.toLowerCase()));
+  const COLS=["Date of Purchase","Date of Receiving","Item","Price (₹)","Vendor","Property","Approved By","Warranty","Invoice No","Notes"];
+
+  function toRow(p){return{"Date of Purchase":p.purchaseDate,"Date of Receiving":p.receiveDate||"","Item":p.item,"Price (₹)":p.price||"","Vendor":p.vendor,"Property":p.property,"Approved By":p.approvedBy,"Warranty":p.warranty||"","Invoice No":p.invoiceNo||"","Notes":p.notes||""};}
+  function dlProp(){dlCSV(filtered.map(toRow),COLS,propF==="All"?"purchases_all.csv":"purchases_"+propF.replace(/ /g,"_")+".csv");}
+  function startEdit(p){setEditId(p.id);setEditForm({...p});}
+  function saveEdit(){setProc(prev=>prev.map(p=>p.id===editId?{...editForm}:p));setEditId(null);}
+  function delRow(id){if(window.confirm("Delete this entry?"))setProc(prev=>prev.filter(p=>p.id!==id));}
 
   return(
     <div>
@@ -1064,7 +1068,7 @@ function HQPurchases({proc,setProc}){
         </div>
       </div>
       <div className="prop-tabs">{usedProps.map(p=><button key={p} className={"prop-tab"+(propF===p?" on":"")} onClick={()=>setPropF(p)}>{p}</button>)}</div>
-      {showAdd&&<FormRow f={form} upFn={upd} saveLabel="Add Order" onSave={()=>{if(!form.item||!form.property){alert("Item and Property required.");return;}setProc(p=>[...p,{...form,id:Date.now(),price:parseFloat(form.price)||0}]);setForm({});setShowAdd(false);}} onCancel={()=>setShowAdd(false)}/>}
+      {showAdd&&<PurchaseFormRowf={form} upFn={upd} saveLabel="Add Order" onSave={()=>{if(!form.item||!form.property){alert("Item and Property required.");return;}setProc(p=>[...p,{...form,id:Date.now(),price:parseFloat(form.price)||0}]);setForm({});setShowAdd(false);}} onCancel={()=>setShowAdd(false)}/>}
       <div className="card" style={{overflow:"hidden"}}>
         <div style={{overflowX:"auto"}}>
           <table className="ltbl">
