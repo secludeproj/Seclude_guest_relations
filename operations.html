@@ -1702,6 +1702,7 @@ function HQPurchases({proc,setProc}){
         <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search item, vendor…" style={{padding:"6px 10px",border:"1.5px solid var(--line)",borderRadius:8,fontSize:".8rem",width:170,outline:"none"}}/>
           <button className="btn btn-dk btn-sm" onClick={dlProp}>⬇ Download</button>
+          {proc.length>0&&<button className="btn btn-sm" style={{background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FECACA"}} onClick={()=>{if(window.confirm("Clear ALL purchases? This cannot be undone."))setProc([]);}}>🗑 Clear all</button>}
           <button className="btn btn-g btn-sm" onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm({purchaseDate:todayISO()});}}>+ New Order</button>
         </div>
       </div>
@@ -1785,6 +1786,7 @@ function HQExpenses({exp,setExp}){
         <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search item, vendor…" style={{padding:"6px 10px",border:"1.5px solid var(--line)",borderRadius:8,fontSize:".8rem",width:170,outline:"none"}}/>
           <button className="btn btn-dk btn-sm" onClick={dlProp}>⬇ Download</button>
+          {exp.length>0&&<button className="btn btn-sm" style={{background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FECACA"}} onClick={()=>{if(window.confirm("Clear ALL expenses? This cannot be undone."))setExp([]);}}>🗑 Clear all</button>}
           <button className="btn btn-g btn-sm" onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm({date:todayISO()});}}>+ Add Expense</button>
         </div>
       </div>

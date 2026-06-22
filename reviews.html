@@ -168,7 +168,7 @@ async function fetchBooking(hotelId,cfg,propId,propName){
 /* ── API: Google Places (v1) ── */
 async function fetchGoogle(placeId,apiKey,propId,propName){
   // New Places API v1 — returns rating, userRatingCount, up to 5 reviews
-  const res=await fetch(`https://places.googleapis.com/v1/places/${placeId}?languageCode=en`,{
+  const res=await fetch(`https://places.googleapis.com/v1/places/${placeId}`,{
     headers:{"X-Goog-Api-Key":apiKey,"X-Goog-FieldMask":"reviews,rating,userRatingCount,displayName","Content-Type":"application/json"}
   });
   if(!res.ok){const t=await res.text();throw new Error(`Google Places API ${res.status}: ${t.slice(0,120)}`);}
