@@ -1524,11 +1524,11 @@ function HQDashboard({requests,proc,exp,onNav}){
             if(!props.length)return null;
             return<div key={loc.id} className="loc-section" style={{marginBottom:12}}>
               <div className="loc-heading" style={{marginBottom:8}}>{loc.icon} {loc.name}</div>
-              <div className="dash-props-grid dash-grid">
-                {props.map(p=><div key={p.id} className="dash-prop-card" onClick={()=>onNav("properties",{prop:p.id})}>
-                  <div className="dash-prop-name">{p.name}</div>
-                  <div className="dash-prop-type">{p.type}</div>
-                  <div className="dash-prop-rooms">{p.rooms.length} rooms</div>
+              <div className="prop-grid">
+                {props.map(p=><div key={p.id} className="prop-card" onClick={()=>onNav("properties",{prop:p.id})}>
+                  <div className="prop-card-name">{p.name}</div>
+                  <div className="prop-card-type">{p.type}</div>
+                  <div className="prop-card-rooms">{p.rooms.length>0?`${p.rooms.length} rooms · ${p.rooms.slice(0,3).join(", ")}${p.rooms.length>3?" …":""}` :"—"}</div>
                 </div>)}
               </div>
             </div>;
