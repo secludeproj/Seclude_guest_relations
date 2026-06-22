@@ -321,14 +321,14 @@ const LOCATIONS=[
     {id:"one-love",name:"One Love",type:"Property",rooms:["Patanga","Jugnu","Titli","Bhanwra","Red Cedar Cottage"]},
     {id:"tea-estate",name:"Tea Estate",type:"Resort",rooms:["Blueberry","Hibiscus","Matcha","Butterfly Pea","Saffron","Berry","Earl Grey","Kaffir Lime","Lavender","Peppermint","Herbal","Black Tea","Oolong","White Tea","Jasmine"]}]},
   {id:"shimla",name:"Shimla",icon:"🏛",state:"Himachal Pradesh",properties:[
-    {id:"taraview",name:"Taraview",type:"Heritage Home",rooms:["Sunbeam","Milkyway","Cosmos","Super Moon","Nebula","Shooting Star"]}]},
+    {id:"taraview",name:"Taraview",type:"Heritage Home",rooms:["Cosmos","Milky Way","Nebula","Shooting Star","Sunbeam","Super Moon"]}]},
   {id:"kasauli",name:"Kasauli",icon:"🎸",state:"Himachal Pradesh",properties:[
     {id:"annies-song",name:"Annie's Song",type:"Resort",rooms:["Almost Heaven","Country Roads","Sleepy Blue","Silver Cloud","Night in the Forest","Starwood","This Old Guitar","Desert Rose","Fly Away","Frida Ka","Walk in the Rain"]}]},
   {id:"nahan",name:"Nahan",icon:"🏰",state:"Himachal Pradesh",properties:[
-    {id:"bantony-cottage",name:"Bantony Cottage",type:"Heritage Resort",rooms:["Palash","Brijraj","Peepal Tree","Shamsher","Raanitaal","Sirmur Suite","Prakash","Maharaja","Maharani"]}]},
+    {id:"bantony-cottage",name:"Bantony Cottage",type:"Heritage Resort",rooms:["Maharaja","Maharani","Palash","Brijraj","Shamsher Suite","Ranitaal","The Sirmur Suite","Prakash","Peepal Tree"]}]},
   // ── Uttarakhand (~29–31°N) ────────────────────────────────
   {id:"mussoorie",name:"Mussoorie",icon:"🏔",state:"Uttarakhand",properties:[
-    {id:"mussoorie",name:"Mussoorie",type:"Boutique Villa",rooms:["Red Red Wine","White Room","Purple Room","Wooden Room","Blue Moon","Yellow Room","Orange Room"]}]},
+    {id:"mussoorie",name:"Mussoorie",type:"Boutique Villa",rooms:["Yellow Submarine","Red Red Wine","Orange Crush","Blue Moon","White Room","Purple Room","Wooden Heart"]}]},
   {id:"pangot",name:"Pangot",icon:"🦜",state:"Uttarakhand",properties:[
     {id:"pangot-perch",name:"Pangot Perch",type:"Boutique Resort",rooms:["Blackbird","Blue Dasher","Butterfly","Dragonfly","Fireflies","Grasshopper","Ladybird","Queen Bee"]}]},
   {id:"ramgarh",name:"Ramgarh",icon:"🌿",state:"Uttarakhand",properties:[
@@ -347,9 +347,9 @@ const LOCATIONS=[
     {id:"marari-sand",name:"Marari Sand",type:"Private Cottages",location:"Marari",rooms:["Royal Villa 1","Royal Villa 2","Royal Villa 3","Royal Villa 4","Royal Villa 5","Royal Villa 6","Premium Villa 1","Premium Villa 2","Premium Villa 3","Pool View 1","Pool View 2","Pool View 3","Pool View 4"]},
     {id:"beach-house",name:"Beach House",type:"Beach House",location:"Kattoor Beach",rooms:["Pristine","Barefoot"]}]},
   {id:"alleppey",name:"Alleppey · By the Lake",icon:"🛶",state:"Kerala",properties:[
-    {id:"blue-villa",name:"Blue Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Room 1","Room 2","Room 3","Room 4"]},
-    {id:"sunrise-villa",name:"Sunrise Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Room 1","Room 2","Room 3","Room 4"]},
-    {id:"green-villa",name:"Green Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Room 1","Room 2"]}]},
+    {id:"blue-villa",name:"Blue Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Bedroom 1","Bedroom 2","Bedroom 3","Bedroom 4"]},
+    {id:"sunrise-villa",name:"Sunrise Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Bedroom 1","Bedroom 2","Bedroom 3","Bedroom 4"]},
+    {id:"green-villa",name:"Green Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Bedroom 1","Bedroom 2"]}]},
 ];
 const ALL_PROPS=LOCATIONS.flatMap(l=>l.properties.map(p=>({...p,location:p.location||l.name,locationId:l.id,locationName:l.name,locIcon:l.icon})));
 

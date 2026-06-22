@@ -11,6 +11,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -83,7 +84,7 @@ const DEFAULT_PLACES={
   "annies-song":    "ChIJ6-0MFtKJDzkRuzo9SIgIO3Q",
   "cliffs-edge":    "ChIJudGpvcq8oDkRkYV5X3kTtY0",
 };
-const INIT_CONFIG={tripadvisor:{apiKey:"",locations:{}},booking:{username:"",password:"",proxyUrl:"",hotels:{}},google:{apiKey:DEFAULT_GOOGLE_KEY,places:DEFAULT_PLACES},manual:{},groqKey:""};
+const INIT_CONFIG={tripadvisor:{apiKey:"",locations:{}},booking:{username:"",password:"",proxyUrl:"",hotels:{}},google:{apiKey:DEFAULT_GOOGLE_KEY,places:DEFAULT_PLACES},gbp:{clientId:"",accountId:"",locations:{}},manual:{},groqKey:""};
 
 /* ── utils ── */
 function useLS(key,init){
@@ -190,6 +191,71 @@ async function fetchGoogle(placeId,apiKey,propId,propName){
   return{propId,platform:"google",avgRating:data.rating||0,reviewCount:data.userRatingCount||0,reviews};
 }
 
+/* ── Google Business Profile API (all reviews, no cap) ── */
+let _gbpToken=null;let _gbpTokenExp=0;
+function saveGBPToken(t){try{localStorage.setItem("seclude_gbp_token",JSON.stringify({t,exp:Date.now()+55*60*1000}));}catch{}}
+function loadGBPToken(){try{const s=localStorage.getItem("seclude_gbp_token");if(!s)return null;const{t,exp}=JSON.parse(s);return Date.now()<exp?t:null;}catch{return null;}}
+function clearGBPToken(){try{localStorage.removeItem("seclude_gbp_token");}catch{}}
+// load on init
+(()=>{const t=loadGBPToken();if(t){_gbpToken=t;_gbpTokenExp=Date.now()+55*60*1000;}})();
+
+function getGBPToken(clientId,callback,silent=false){
+  if(_gbpToken&&Date.now()<_gbpTokenExp){callback(_gbpToken);return;}
+  if(!window.google?.accounts?.oauth2){if(!silent)alert("Google Identity Services not loaded yet");return;}
+  const client=google.accounts.oauth2.initTokenClient({
+    client_id:clientId,
+    scope:"https://www.googleapis.com/auth/business.manage",
+    callback:(r)=>{
+      if(r.access_token){
+        _gbpToken=r.access_token;_gbpTokenExp=Date.now()+55*60*1000;
+        saveGBPToken(r.access_token);callback(r.access_token);
+      }
+    },
+    error_callback:()=>{if(!silent)alert("GBP sign-in failed or was cancelled");}
+  });
+  client.requestAccessToken(silent?{prompt:""}:{});
+}
+
+async function fetchGBPLocations(token,accountId){
+  const res=await fetch(`https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations?pageSize=100`,{
+    headers:{Authorization:"Bearer "+token}
+  });
+  if(!res.ok){const t=await res.text();throw new Error(`GBP locations ${res.status}: ${t.slice(0,120)}`);}
+  const data=await res.json();
+  return data.locations||[];
+}
+
+async function fetchGBPAccounts(token){
+  const res=await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts",{
+    headers:{Authorization:"Bearer "+token}
+  });
+  if(!res.ok){const t=await res.text();throw new Error(`GBP accounts ${res.status}: ${t.slice(0,120)}`);}
+  const data=await res.json();
+  return data.accounts||[];
+}
+
+async function fetchGBPReviews(token,accountId,locationId,propId,propName){
+  const STAR={ONE:1,TWO:2,THREE:3,FOUR:4,FIVE:5};
+  let all=[],pageToken="";
+  do{
+    const url=`https://mybusiness.googleapis.com/v4/accounts/${accountId}/locations/${locationId}/reviews?pageSize=50${pageToken?"&pageToken="+pageToken:""}`;
+    const res=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+    if(!res.ok){const t=await res.text();throw new Error(`GBP reviews ${res.status}: ${t.slice(0,120)}`);}
+    const data=await res.json();
+    (data.reviews||[]).forEach(r=>all.push({
+      id:`gbp_${locationId}_${r.reviewId}`,
+      platform:"google",platformName:"Google (Business Profile)",
+      propertyId:propId,propertyName:propName,
+      rating:STAR[r.starRating]||0,title:"",
+      text:r.comment||"",
+      author:r.reviewer?.displayName||"Guest",authorLocation:"",
+      date:r.createTime||"",tripType:"",url:"",language:"",
+    }));
+    pageToken=data.nextPageToken||"";
+  }while(pageToken);
+  return{propId,platform:"google",avgRating:0,reviewCount:all.length,reviews:all};
+}
+
 /* ── AI summary via Groq (Llama 3.3 70B — free) ── */
 async function genSummary(reviews,propName,apiKey){
   const text=reviews.slice(0,25).map(r=>`[${r.rating}★ — ${r.platform}] ${r.title?r.title+": ":""}${r.text||""}`).join("\n\n");
@@ -246,6 +312,9 @@ function App(){
   const[fSearch,setFSearch]=useState("");
   const[showSettings,setShowSettings]=useState(false);
   const[importPlat,setImportPlat]=useState(null);
+  const[gbpConnected,setGbpConnected]=useState(()=>!!loadGBPToken());
+  const[gbpLocList,setGbpLocList]=useState([]);
+  const[gbpLocLoading,setGbpLocLoading]=useState(false);
   const hasTAKey=!!(config.tripadvisor?.apiKey);
 
   // Load accumulated reviews from Firestore on mount
@@ -263,7 +332,10 @@ function App(){
     const gPlaces={...DEFAULT_PLACES,...(cfg.google?.places||{})};
     const gApiKey=cfg.google?.apiKey||DEFAULT_GOOGLE_KEY;
     const gEntries=Object.entries(gPlaces).filter(([,id])=>id);
-    if(!taEntries.length&&!bkEntries.length&&!gEntries.length)return;
+    const gbpCfg=cfg.gbp||{};
+    const gbpEntries=Object.entries(gbpCfg.locations||{}).filter(([,id])=>id);
+    const gbpAccountId=gbpCfg.accountId||"";
+    if(!taEntries.length&&!bkEntries.length&&!gEntries.length&&!gbpEntries.length)return;
     setErrors({});
     const jobs=[
       ...taEntries.map(([propId,locationId])=>async()=>{
@@ -305,6 +377,19 @@ function App(){
         }catch(e){setErrors(er=>({...er,[k]:e.message}));}
         finally{setLoading(l=>({...l,[k]:false}));}
       }),
+      // GBP jobs — run only if token available
+      ...(gbpEntries.length&&gbpAccountId&&_gbpToken?gbpEntries.map(([propId,locationId])=>async()=>{
+        const prop=ALL_PROPS.find(p=>p.id===propId);
+        const k=`gbp_${propId}`;
+        setLoading(l=>({...l,[k]:true}));
+        try{
+          const r=await fetchGBPReviews(_gbpToken,gbpAccountId,locationId,propId,prop?.name||propId);
+          setStats(s=>({...s,[`google_${propId}`]:{avgRating:r.avgRating,reviewCount:r.reviewCount}}));
+          setAllReviews(prev=>{const existIds=new Set(prev.map(x=>x.id));const fresh=r.reviews.filter(x=>!existIds.has(x.id));return fresh.length?[...prev,...fresh]:prev;});
+          await fsSave("google",propId,r.reviews);
+        }catch(e){setErrors(er=>({...er,[k]:e.message}));}
+        finally{setLoading(l=>({...l,[k]:false}));}
+      }):[]),
     ];
     await Promise.all(jobs.map(fn=>fn()));
   },[config]);
@@ -816,8 +901,8 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
 
   function save(){setConfig(lc);onClose();setTimeout(onFetch,300);}
   const inp={width:"100%",padding:"8px 11px",border:"1px solid #D1D5DB",borderRadius:8,fontSize:13,outline:"none"};
-  const TABS=["tripadvisor","google","booking","ai","guide"];
-  const TLABEL={tripadvisor:"TripAdvisor",google:"Google",booking:"Booking.com",ai:"AI / Groq",guide:"API Guide"};
+  const TABS=["tripadvisor","google","gbp","booking","ai","guide"];
+  const TLABEL={tripadvisor:"TripAdvisor",google:"Google Places",gbp:"Google Business",booking:"Booking.com",ai:"AI / Groq",guide:"API Guide"};
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -886,6 +971,79 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
             </div>
           )}
 
+          {tab==="gbp"&&(()=>{
+            const gbpCfg=lc.gbp||{clientId:"",accountId:"",locations:{}};
+            function setGBP(k,v){setLc(c=>({...c,gbp:{...(c.gbp||{}),clientId:c.gbp?.clientId||"",accountId:c.gbp?.accountId||"",locations:c.gbp?.locations||{},[k]:v}}));}
+            function setGBPLoc(propId,v){setLc(c=>({...c,gbp:{...(c.gbp||{}),locations:{...(c.gbp?.locations||{}),[propId]:v}}}));}
+            function connectGBP(){
+              if(!gbpCfg.clientId){alert("Enter your OAuth Client ID first");return;}
+              getGBPToken(gbpCfg.clientId,async(tok)=>{
+                setGbpConnected(true);
+                // auto-fetch account ID if not set
+                if(!gbpCfg.accountId){
+                  setGbpLocLoading(true);
+                  try{
+                    const accounts=await fetchGBPAccounts(tok);
+                    if(accounts.length){
+                      const acId=accounts[0].name.replace("accounts/","");
+                      setGBP("accountId",acId);
+                      const locs=await fetchGBPLocations(tok,acId);
+                      setGbpLocList(locs);
+                    }
+                  }catch(e){alert("Could not fetch GBP data: "+e.message);}
+                  finally{setGbpLocLoading(false);}
+                }else{
+                  setGbpLocLoading(true);
+                  try{const locs=await fetchGBPLocations(tok,gbpCfg.accountId);setGbpLocList(locs);}
+                  catch(e){alert("Could not fetch locations: "+e.message);}
+                  finally{setGbpLocLoading(false);}
+                }
+              });
+            }
+            function disconnectGBP(){clearGBPToken();_gbpToken=null;_gbpTokenExp=0;setGbpConnected(false);setGbpLocList([]);}
+            return(
+              <div>
+                <div style={{background:"#EAF1FB",border:"1px solid #93C5FD",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"#1E3A5F"}}>
+                  <b>Google Business Profile API</b> — fetches <b>ALL reviews</b> (no 5-review cap) directly from your verified Google Business listings. Requires OAuth sign-in with the Google account that manages your Business Profile.
+                </div>
+                <label style={{fontSize:12,fontWeight:600,display:"block",marginBottom:4,color:"#374151"}}>OAuth Client ID</label>
+                <input value={gbpCfg.clientId||""} onChange={e=>setGBP("clientId",e.target.value)} placeholder="953422377072-xxxx.apps.googleusercontent.com" style={inp}/>
+                <div style={{fontSize:11,color:"#6B7280",margin:"4px 0 12px"}}>Use the same OAuth Client ID from your Google Cloud Console project (must have <b>Google Business Profile API</b> enabled and the scope <code>business.manage</code> whitelisted).</div>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
+                  {gbpConnected
+                    ?<><span style={{fontSize:12,color:"#059669",fontWeight:600}}>✅ Connected</span><button onClick={disconnectGBP} style={{padding:"5px 12px",background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FECACA",borderRadius:6,fontSize:12,cursor:"pointer"}}>Disconnect</button></>
+                    :<button onClick={connectGBP} style={{padding:"7px 14px",background:"#0F5C4C",color:"#fff",border:"none",borderRadius:7,fontSize:12,cursor:"pointer",fontWeight:600}}>🔗 Connect Google Business Profile</button>
+                  }
+                  {gbpConnected&&gbpCfg.accountId&&<span style={{fontSize:11,color:"#6B7280"}}>Account ID: {gbpCfg.accountId}</span>}
+                </div>
+                {gbpLocLoading&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10}}>Loading locations…</div>}
+                {gbpLocList.length>0&&(
+                  <div style={{marginBottom:14,padding:"10px 12px",background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:8}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#166534",marginBottom:6}}>Your GBP Locations (click to copy ID)</div>
+                    {gbpLocList.map(loc=>{const id=loc.name.split("/").pop();return(
+                      <div key={id} style={{fontSize:11,color:"#374151",padding:"3px 0",cursor:"pointer",display:"flex",gap:8}}
+                        onClick={()=>navigator.clipboard.writeText(id).catch(()=>{})}
+                        title="Click to copy location ID">
+                        <code style={{background:"#D1FAE5",padding:"1px 5px",borderRadius:3,color:"#065F46"}}>{id}</code>
+                        <span>{loc.locationName||loc.title||""}</span>
+                        <span style={{color:"#6B7280"}}>{loc.address?.addressLines?.[0]||""}</span>
+                      </div>
+                    );})}
+                  </div>
+                )}
+                <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:6}}>Property → GBP Location IDs</div>
+                <div style={{fontSize:11,color:"#6B7280",marginBottom:10}}>Click "Connect" above to auto-list your locations, then copy-paste each location's ID below.</div>
+                {ALL_PROPS.map(prop=>(
+                  <div key={prop.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:7}}>
+                    <span style={{fontSize:12,fontWeight:500,color:"#374151",width:155,flexShrink:0}}>{prop.name}</span>
+                    <input value={gbpCfg.locations[prop.id]||""} onChange={e=>setGBPLoc(prop.id,e.target.value)}
+                      placeholder="Location ID…" style={{flex:1,padding:"5px 8px",border:"1px solid #D1D5DB",borderRadius:6,fontSize:12,outline:"none"}}/>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           {tab==="booking"&&(
             <div>
               <div style={{background:"#FEF3C7",border:"1px solid #F59E0B",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"#92400E"}}><b>Note:</b> Booking.com credential auth was sunset Dec 2025. Requires OAuth 2.0 + CORS proxy. Contact your partner manager for credentials.</div>
@@ -920,7 +1078,8 @@ function SettingsModal({config,setConfig,onClose,onFetch}){
             <div>
               {[
                 {name:"TripAdvisor",icon:"✅",status:"Full API — browser direct",text:"Free Content API key from developer-tripadvisor.com. 5,000 calls/month free, 5 most recent reviews per property per fetch. Reviews accumulate in Firestore across refreshes."},
-                {name:"Google",icon:"✅",status:"Full API — browser direct",text:"Uses the new Google Places API (v1). Enable 'Places API (New)' in Google Cloud Console, create an API key, then paste each property's Place ID (ChIJ…) in the Google tab. Returns up to 5 most recent reviews + official star rating and total review count. $200/month free credit (~5,000 requests)."},
+                {name:"Google Places API",icon:"✅",status:"Up to 5 reviews per property",text:"Uses Google Places API (v1). Enable 'Places API (New)' in Google Cloud Console, add an API key and each property's Place ID (ChIJ…) in the Google Places tab. Returns up to 5 most recent reviews + overall star rating and total count. $200/month free credit (~5,000 requests)."},
+                {name:"Google Business Profile API",icon:"⭐",status:"ALL reviews — OAuth required",text:"Connects directly to your verified Google Business Profile via OAuth. Returns every review with no cap. Enable 'Google Business Profile API' in Google Cloud Console, add the OAuth Client ID in the GBP tab, click Connect, and map your locations. This is the recommended way to get complete review history."},
                 {name:"Booking.com",icon:"🔧",status:"API exists — needs proxy + OAuth",text:"Reviews API available for connectivity partners. Credential auth sunset Dec 2025; now needs OAuth 2.0 + CORS proxy (Cloudflare Worker or Vercel function). Contact your Booking.com partner manager."},
                 {name:"Airbnb",icon:"⚠️",status:"No public API",text:"No public reviews API. Use '+ Airbnb' import button to add reviews manually from your host dashboard."},
                 {name:"Agoda",icon:"⚠️",status:"No public API",text:"Partner portal shows reviews but no API. Manual import available."},
