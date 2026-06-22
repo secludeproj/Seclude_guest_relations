@@ -406,14 +406,18 @@ const SALES_USERS=[
 ];
 
 const PROPERTIES=[
-  // Pangot / Uttarakhand
+  // Uttarakhand
   "Pangot Perch","Taraview","Willows","Taradale","Cliffs Edge",
-  // Mussoorie / Himachal
+  // Himachal Pradesh
   "Mussoorie","Annie's Song","Two Stones","Bantony Cottage",
   // Palampur / HP
-  "Palampur","One Love","Tea Estate","Red Cedar Cottage",
+  "One Love","Tea Estate","Red Cedar Cottage",
+  // Goa
+  "Falling Cashews",
+  // Karnataka
+  "Hampi 1800",
   // Kerala
-  "Karthika Nivas","Marari Sand","Beach House by the Lake","Falling Cashews",
+  "Karthika Nivas","Marari Sand","Beach House by the Lake","Blue Villa","Sunrise Villa","Green Villa",
 ];
 
 const MEAL_PLANS=["Room Only","CP – Breakfast","MAP – Breakfast & Dinner","AP – All Meals","All Inclusive"];
@@ -440,17 +444,25 @@ const DEFAULT_EXP_PRICES=Object.fromEntries(
 
 // Editable room rates per property — stored in localStorage via GuestApp
 const DEFAULT_ROOM_RATES={
-  "Pangot Perch":{"Fireflies":12500,"Kingfisher":11000,"Skylark":11000,"Red Vanga":12000,"Barbet":11500,"Mrs. Gould":13000,"Flycatcher":10500,"Whistling Thrush":14000},
-  "Willows":{"Blue Poppies":14000,"Olive Branch":13000,"Morning Mist":13500,"Rosewater":12500,"Foxglove":12000,"Honeysuckle":11500,"River Birch":14500,"Wild Violet":13000,"Wintergreen":12000,"Hawthorn":13500,"Wild Rose":15000},
-  "Taraview":{"Sunbeam":15000,"Cosmos":15000,"Milky Way":16000,"Nebula":15500,"Shooting Star":15000,"Super Moon":17000},
-  "Karthika Nivas":{"Room 1":18000,"Room 2":18000,"Room 3":20000,"Room 4":20000,"Room 5":22000},
-  "Annie's Song":{"Room 1":12000,"Room 2":12000,"Room 3":13000,"Room 4":13000,"Room 5":14000,"Room 6":14000,"Room 7":15000,"Room 8":15000,"Room 9":16000,"Room 10":16000,"Room 11":18000},
-  "Mussoorie":{"Room 1":13000,"Room 2":13000,"Room 3":14000,"Room 4":15000,"Room 5":15000,"Room 6":16000,"Room 7":18000},
-  "Two Stones":{"Room 1":20000,"Room 2":20000,"Room 3":22000,"Room 4":24000},
-  "One Love":{"Room 1":18000,"Room 2":18000,"Room 3":20000,"Room 4":20000,"Room 5":22000},
-  "Tea Estate":{"Room 1":16000,"Room 2":16000,"Room 3":17000,"Room 4":17000,"Room 5":18000,"Room 6":18000,"Room 7":19000,"Room 8":19000,"Room 9":20000,"Room 10":20000,"Room 11":21000,"Room 12":21000,"Room 13":22000,"Room 14":22000,"Room 15":24000},
-  "Taradale":{"Room 1":14000,"Room 2":14000,"Room 3":15000,"Room 4":15000,"Room 5":16000,"Room 6":18000},
-  "Bantony Cottage":{"Room 1":22000,"Room 2":22000,"Room 3":24000,"Room 4":24000,"Room 5":26000,"Room 6":26000,"Room 7":28000,"Room 8":28000,"Room 9":30000},
+  "Pangot Perch":{"Blackbird":11000,"Blue Dasher":11000,"Butterfly":11500,"Dragonfly":11500,"Fireflies":12500,"Grasshopper":11000,"Ladybird":11000,"Queen Bee":13000},
+  "Taraview":{"Cosmos":15000,"Milky Way":16000,"Nebula":15500,"Shooting Star":15000,"Sunbeam":15000,"Super Moon":17000},
+  "Willows":{"Blue Poppies":14000,"Happy Hydrangea":13000,"Olive Branch":13000,"Lazy Lillies":12500,"Sweet Irish":12000,"Cherry Blossom":13500,"Birds of Paradise":14500,"Honey Buttercup":13000,"Rustic Rose":12000,"Dainty Daisy":13500,"Snow Drop":15000},
+  "Taradale":{"Rosefinch":14000,"Magpie":14000,"Parakeet":15000,"Myna":15000,"Cuckoo":16000,"Sunbird":18000},
+  "Cliffs Edge":{"Vasant":18000,"Grishma":18000,"Varsha":19000,"Hemant":19000,"Sharath":20000,"Shishir":20000,"Kartik":21000,"Simha":21000,"Megha":22000},
+  "Mussoorie":{"Yellow Submarine":13000,"Red Red Wine":13000,"Orange Crush":14000,"Blue Moon":15000,"White Room":15000,"Purple Room":16000,"Wooden Heart":18000},
+  "Annie's Song":{"Almost Heaven":12000,"Country Roads":12000,"Sleepy Blue":13000,"Silver Cloud":13000,"Night in the Forest":14000,"Starwood":14000,"This Old Guitar":15000,"Desert Rose":15000,"Fly Away":16000,"Frida Ka":16000,"Walk in the Rain":18000},
+  "Two Stones":{"Pukhraj":20000,"Panna":20000,"Neelam":22000,"Gomed":24000},
+  "Bantony Cottage":{"Maharaja":22000,"Maharani":22000,"Palash":24000,"Brijraj":24000,"Shamsher Suite":26000,"Ranitaal":26000,"The Sirmur Suite":28000,"Prakash":28000,"Peepal Tree":30000},
+  "One Love":{"Patanga":18000,"Jugnu":18000,"Titli":20000,"Bhanwra":20000,"Red Cedar Cottage":22000},
+  "Tea Estate":{"Blueberry":16000,"Hibiscus":16000,"Matcha":17000,"Butterfly Pea":17000,"Saffron":18000,"Berry":18000,"Earl Grey":19000,"Kaffir Lime":19000,"Lavender":20000,"Peppermint":20000,"Herbal":21000,"Black Tea":21000,"Oolong":22000,"White Tea":22000,"Jasmine":24000},
+  "Falling Cashews":{"The Double":18000,"The Twin":18000},
+  "Hampi 1800":{"Sugriva Red":22000,"Tungabhadra Blue":22000,"Bazaar Yellow":24000,"Kishkindha Green":24000,"Lotus Pink":26000,"Matanga Purple":26000},
+  "Karthika Nivas":{"Tejas":18000,"Vayu":18000,"Akash":20000,"Prithvi":20000,"Apas":22000},
+  "Marari Sand":{"Royal Villa 1":25000,"Royal Villa 2":25000,"Royal Villa 3":25000,"Royal Villa 4":25000,"Royal Villa 5":25000,"Royal Villa 6":25000,"Premium Villa 1":22000,"Premium Villa 2":22000,"Premium Villa 3":22000,"Pool View 1":18000,"Pool View 2":18000,"Pool View 3":18000,"Pool View 4":18000},
+  "Beach House by the Lake":{"Pristine":30000,"Barefoot":30000},
+  "Blue Villa":{"Bedroom 1":20000,"Bedroom 2":20000,"Bedroom 3":20000,"Bedroom 4":20000},
+  "Sunrise Villa":{"Bedroom 1":20000,"Bedroom 2":20000,"Bedroom 3":20000,"Bedroom 4":20000},
+  "Green Villa":{"Bedroom 1":18000,"Bedroom 2":18000},
 };
 
 const EXPERIENCES=[
@@ -1642,26 +1654,31 @@ function OutreachPage({bookings,session,waTemplates,setWaTemplates,roomRates,onU
 
 /* ══ GMAIL SYNC ENGINE ════════════════════════════════════════ */
 const PROP_FROM_PREFIX={
-  // Pangot
+  // Uttarakhand / Pangot
   SECP:'Pangot Perch',
-  // Uttarakhand
   SECW:'Willows',SECT:'Taraview',SECD:'Taradale',SECE:'Cliffs Edge',
-  // Mussoorie / Himachal
+  // Himachal Pradesh
   SECM:'Mussoorie',SECA:"Annie's Song",SECS:'Two Stones',SECB:'Bantony Cottage',
-  // Palampur — PAL prefix covers all three cottages; room name resolves exact property
-  PAL:'Palampur',SECOL:'One Love',SECTE:'Tea Estate',SECRC:'Red Cedar Cottage',
+  // Palampur / HP
+  SECOL:'One Love',SECTE:'Tea Estate',SECRC:'Red Cedar Cottage',
+  // Goa
+  SECFC:'Falling Cashews',
+  // Karnataka
+  SECH:'Hampi 1800',
   // Kerala
-  SECK:'Karthika Nivas',SECMS:'Marari Sand',SECBH:'Beach House by the Lake',SECFC:'Falling Cashews'
+  SECK:'Karthika Nivas',SECMS:'Marari Sand',SECBH:'Beach House by the Lake',
+  SECBV:'Blue Villa',SECSV:'Sunrise Villa',SECGV:'Green Villa',
 };
-// Djubo property name → internal property name (for non-SEC prefixed hotels)
+// Djubo property name → internal property name
 const DJUBO_NAME_MAP={
-  'palampur':'Palampur',
   'pangot, perch':'Pangot Perch','pangot perch':'Pangot Perch',
   'willows':'Willows','taraview':'Taraview','taradale':'Taradale','cliffs edge':'Cliffs Edge',
   "mussoorie":"Mussoorie","annie's song":"Annie's Song","two stones":"Two Stones","bantony cottage":"Bantony Cottage",
   'one love':'One Love','tea estate':'Tea Estate','red cedar cottage':'Red Cedar Cottage',
+  'falling cashews':'Falling Cashews','hampi 1800':'Hampi 1800','hampi':'Hampi 1800',
   'karthika nivas':'Karthika Nivas','marari sand':'Marari Sand',
-  'beach house by the lake':'Beach House by the Lake','falling cashews':'Falling Cashews',
+  'beach house by the lake':'Beach House by the Lake','beach house':'Beach House by the Lake',
+  'blue villa':'Blue Villa','sunrise villa':'Sunrise Villa','green villa':'Green Villa',
 };
 // Extract property name from subject — used as fallback only
 function propFromSubject(subject){
@@ -3292,6 +3309,99 @@ function PricingSettings({expPrices,setExpPrices,roomRates,setRoomRates}){
 }
 
 /* ══ GUEST APP ════════════════════════════════════════════════ */
+// ── Firestore pending-queue consumer (GAS auto-sync) ──────────────────────────
+var GR_PENDING_API='https://firestore.googleapis.com/v1/projects/seclude-ops/databases/(default)/documents/seclude_gr_pending';
+var GR_API_KEY='AIzaSyCzbDofACiuSslCH2pVMZzNDfLLQa2_dYI';
+
+function fsVal(v){
+  if(!v)return null;
+  if(v.stringValue!==undefined)return v.stringValue;
+  if(v.integerValue!==undefined)return parseInt(v.integerValue);
+  if(v.doubleValue!==undefined)return parseFloat(v.doubleValue);
+  if(v.booleanValue!==undefined)return v.booleanValue;
+  if(v.nullValue!==undefined)return null;
+  if(v.arrayValue)return(v.arrayValue.values||[]).map(fsVal);
+  if(v.mapValue)return fsFieldsToObj(v.mapValue.fields||{});
+  return null;
+}
+function fsFieldsToObj(fields){
+  var o={};for(var k in fields){if(fields.hasOwnProperty(k))o[k]=fsVal(fields[k]);}return o;
+}
+
+async function consumePendingQueue(setBookings){
+  try{
+    var r=await fetch(GR_PENDING_API+'?key='+GR_API_KEY+'&pageSize=200');
+    if(!r.ok)return;
+    var data=await r.json();
+    var docs=data.documents||[];
+    if(!docs.length)return;
+
+    var newBookings=[],toDelete=[];
+    docs.forEach(function(doc){
+      var obj=fsFieldsToObj(doc.fields||{});
+      toDelete.push(doc.name); // full resource name
+      if(obj._type==='cancellation'){
+        // Handle cancellation - mark booking as cancelled in localStorage
+        if(obj.reservationId){
+          setBookings(prev=>prev.map(b=>
+            b.reservationId===obj.reservationId?{...b,status:'Cancelled'}:b
+          ));
+        }
+      } else {
+        // Convert GAS booking to index.html booking shape
+        var rooms=Array.isArray(obj.rooms)?obj.rooms:[];
+        var booking={
+          id: obj.id||('djubo_'+obj.reservationId),
+          reservationId: obj.reservationId||'',
+          property: obj.property||'',
+          guestName: obj.guestName||'',
+          guestEmail: obj.guestEmail||'',
+          guestPhone: obj.guestPhone||'',
+          checkIn: obj.checkIn||'',
+          checkInTime: obj.checkInTime||'14:00',
+          checkOut: obj.checkOut||'',
+          checkOutTime: obj.checkOutTime||'11:00',
+          rooms: rooms,
+          financials: obj.financials||{},
+          reservationType: obj.reservationType||'Direct',
+          status: obj.status||'Confirmed',
+          upsellStatus: obj.upsellStatus||'Pending',
+          callLog: obj.callLog||[],
+          pipelineStages: obj.pipelineStages||{},
+          notes: obj.notes||'',
+          createdBy: obj.createdBy||'',
+          addedOn: obj.addedOn||'',
+          source: obj.source||'gas_auto',
+        };
+        newBookings.push(booking);
+      }
+    });
+
+    if(newBookings.length){
+      setBookings(prev=>{
+        var updated=[...prev];
+        newBookings.forEach(function(nb){
+          var idx=updated.findIndex(function(b){return b.reservationId&&b.reservationId===nb.reservationId;});
+          if(idx>=0){updated[idx]={...updated[idx],...nb};}
+          else{updated.unshift(nb);}
+        });
+        return updated;
+      });
+    }
+
+    // Delete consumed docs from Firestore
+    toDelete.forEach(async function(docName){
+      try{
+        await fetch('https://firestore.googleapis.com/v1/'+docName+'?key='+GR_API_KEY,{method:'DELETE'});
+      }catch(e){}
+    });
+
+    console.log('[GR] Consumed',newBookings.length,'bookings from GAS queue');
+  }catch(e){
+    console.warn('[GR] consumePendingQueue error:',e);
+  }
+}
+
 function GuestApp({session,onLogout}){
   const[bookings,setBookings]=useLS("seclude_gr_bookings_v1",INIT_BOOKINGS);
   const[expPrices,setExpPrices]=useLS("seclude_exp_prices_v1",DEFAULT_EXP_PRICES);
@@ -3301,6 +3411,9 @@ function GuestApp({session,onLogout}){
   const[selId,setSelId]=useState(null);
   const[editBooking,setEditBooking]=useState(null);
   const[addMode,setAddMode]=useState(false);
+
+  // Auto-consume GAS pending queue on mount
+  useEffect(()=>{consumePendingQueue(setBookings);},[]);
 
   const outreachOverdue=bookings.reduce((n,b)=>n+WA_STAGES.filter(s=>getWaStageStatus(b,s.id).status==='overdue').length,0);
   const outreachDue=bookings.reduce((n,b)=>n+WA_STAGES.filter(s=>getWaStageStatus(b,s.id).status==='due').length,0);
