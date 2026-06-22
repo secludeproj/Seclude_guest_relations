@@ -11,6 +11,12 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  firebase.initializeApp({apiKey:"AIzaSyCzbDofACiuSslCH2pVMZzNDfLLQa2_dYI",authDomain:"seclude-ops.firebaseapp.com",projectId:"seclude-ops",storageBucket:"seclude-ops.firebasestorage.app",messagingSenderId:"953422377072",appId:"1:953422377072:web:b49f5c7463c876b497c4b5"});
+  window.db=firebase.firestore();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -477,8 +483,9 @@ const EXPERIENCES=[
   {id:"SS",category:"Culture",name:"Sight Seeing",shortDesc:"Explore beautiful landmarks and attractions",detailedDesc:"Explore famous landmarks, scenic locations, and cultural attractions — Neem Karoli Temple, Mukteshwar, Nainital and more.",inclusion:"Neem Karoli Temple, Mukteshwar, Nainital",timings:"As needed",price:5000,priceLabel:"₹5,000 onwards",emoji:"🏔️",bestFor:["all","multinight","family","couple"]},
 ];
 
-const INIT_BOOKINGS=[
-  {
+const INIT_BOOKINGS=[ /* no sample data — all real leads load from Firestore */
+  // REMOVED sample bookings — real data syncs from Firestore collection "gr/seclude_gr_bookings_v2"
+  /* {
     id:"bk1",reservationId:"SECP0001829",property:"Pangot Perch",
     guestName:"Manvendra Pratap Singh",guestEmail:"manvendra.ps97@gmail.com",guestPhone:"7011249333",
     checkIn:"2026-06-16",checkInTime:"14:00",checkOut:"2026-06-18",checkOutTime:"11:00",
@@ -522,7 +529,7 @@ const INIT_BOOKINGS=[
     status:"Confirmed",upsellStatus:"Sold",
     callLog:[{id:"cl2",date:"2026-06-12",agentId:2,agentName:"Rohit Khanna",pitched:["PIC","BW","SS","TRN"],sold:[{expId:"PIC",confirmedPrice:4000,expDate:"2026-06-23",notes:""},{expId:"SS",confirmedPrice:5500,expDate:"2026-06-24",notes:"Nainital + Mukteshwar"}],outcome:"Sold",notes:"Family was very enthusiastic — upsold Picnic and Sight Seeing"}],
     pipelineStages:{details:"2026-06-11",upgrade:"2026-06-12",addons:"2026-06-12"},addedById:2,addedOn:"2026-06-11",_sample:true
-  }
+  } */
 ];
 
 /* ══ UTILS ══════════════════════════════════════════════════════ */
@@ -530,6 +537,42 @@ function useLS(key,init){
   const[v,setV]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):(typeof init==="function"?init():init);}catch{return typeof init==="function"?init():init;}});
   useEffect(()=>{try{localStorage.setItem(key,JSON.stringify(v));}catch{}},[v,key]);
   return[v,setV];
+}
+/* Real-time Firestore sync — falls back to localStorage when offline.
+   Debounces writes to avoid hammering Firestore on rapid changes.
+   Incoming snapshot from another device cancels any pending local write. */
+function useFirestore(key,init,debounceMs=1500){
+  const[v,setV]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):(typeof init==="function"?init():init);}catch{return typeof init==="function"?init():init;}});
+  const timerRef=useRef(null);
+  const pendingRef=useRef(null);
+  useEffect(()=>{
+    if(!window.db)return;
+    const unsub=window.db.collection("gr").doc(key).onSnapshot(snap=>{
+      if(snap.exists){
+        const data=snap.data().v;
+        clearTimeout(timerRef.current);pendingRef.current=null;
+        try{localStorage.setItem(key,JSON.stringify(data));}catch{}
+        setV(data);
+      }
+    },err=>console.warn("[GR FS]",key,err));
+    return()=>unsub();
+  },[key]);
+  function setVSync(valOrFn){
+    setV(prev=>{
+      const next=typeof valOrFn==="function"?valOrFn(prev):valOrFn;
+      try{localStorage.setItem(key,JSON.stringify(next));}catch{}
+      pendingRef.current=next;
+      clearTimeout(timerRef.current);
+      timerRef.current=setTimeout(()=>{
+        if(window.db&&pendingRef.current!==null){
+          window.db.collection("gr").doc(key).set({v:pendingRef.current,_ts:Date.now()}).catch(e=>console.warn("[GR write]",key,e));
+          pendingRef.current=null;
+        }
+      },debounceMs);
+      return next;
+    });
+  }
+  return[v,setVSync];
 }
 function fmtDate(s){if(!s)return"—";try{return new Date(s+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}catch{return s;}}
 function fmtDateShort(s){if(!s)return"—";try{return new Date(s+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short"});}catch{return s;}}
@@ -3403,7 +3446,7 @@ async function consumePendingQueue(setBookings){
 }
 
 function GuestApp({session,onLogout}){
-  const[bookings,setBookings]=useLS("seclude_gr_bookings_v1",INIT_BOOKINGS);
+  const[bookings,setBookings]=useFirestore("seclude_gr_bookings_v2",INIT_BOOKINGS,2000);
   const[expPrices,setExpPrices]=useLS("seclude_exp_prices_v1",DEFAULT_EXP_PRICES);
   const[roomRates,setRoomRates]=useLS("seclude_room_rates_v1",DEFAULT_ROOM_RATES);
   const[waTemplates,setWaTemplates]=useLS("seclude_wa_templates_v1",DEFAULT_WA_TEMPLATES);
@@ -3452,7 +3495,10 @@ function GuestApp({session,onLogout}){
             <div className="slogo-text">Seclude</div>
             <div className="slogo-sub">Guest Relations</div>
           </div>
-          <button className="s-logout" onClick={onLogout}>Sign out</button>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {window.db&&<span style={{fontSize:".65rem",background:"rgba(52,211,153,.15)",color:"#34d399",border:"1px solid rgba(52,211,153,.25)",borderRadius:5,padding:"2px 7px",fontWeight:700}}>● Live</span>}
+            <button className="s-logout" onClick={onLogout}>Sign out</button>
+          </div>
         </div>
         <div className="snav">
           <div className="snav-sect">Sales</div>
