@@ -1988,7 +1988,24 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
 /* ══ GMAIL SYNC PANEL ══════════════════════════════════════════ */
 const GMAIL_CLIENT_ID='824198991836-s9i9mk9n9ev4nn5eq5nvn03bi614vbmb.apps.googleusercontent.com';
 const SYNC_COOLDOWN_MS=5*60*1000; // 5 minutes between auto-syncs
-let _gmailToken=null; // module-level token — survives re-renders/remounts
+let _gmailToken=null; // module-level token — survives re-renders within a session
+
+// Persist token to localStorage so page reloads within 55 min skip the account picker entirely
+function saveTokenLS(tok){
+  try{localStorage.setItem('seclude_gmail_token',JSON.stringify({tok,exp:Date.now()+55*60*1000}));}catch{}
+}
+function loadTokenLS(){
+  try{
+    const s=localStorage.getItem('seclude_gmail_token');
+    if(!s)return null;
+    const{tok,exp}=JSON.parse(s);
+    return Date.now()<exp?tok:null; // null if expired
+  }catch{return null;}
+}
+function clearTokenLS(){try{localStorage.removeItem('seclude_gmail_token');}catch{}}
+
+// Bootstrap: if a valid saved token exists, use it immediately (no popup on reload)
+if(!_gmailToken){const t=loadTokenLS();if(t)_gmailToken=t;}
 
 function GmailSyncPanel({bookings,setBookings,isVisible}){
   const[lastSync,setLastSync]=useLS('seclude_gmail_last_sync',null);
@@ -2010,17 +2027,12 @@ function GmailSyncPanel({bookings,setBookings,isVisible}){
       setLastResult(res);setStatus('done');
       setTimeout(()=>setStatus('idle'),4000);
     }catch(e){
-      if(String(e).includes('401')||String(e).includes('403')){_gmailToken=null;setHasToken(false);}
+      // Token expired or revoked — clear it so next attempt re-auths
+      if(String(e).includes('401')||String(e).includes('403')){
+        _gmailToken=null;clearTokenLS();setHasToken(false);
+      }
       setStatus('error');console.error('Gmail sync error:',e);
     }
-  }
-
-  // After getting a token, silently fetch the user's email for future auto-login
-  async function storeAccountHint(tok){
-    try{
-      const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}});
-      if(r.ok){const u=await r.json();if(u.email)localStorage.setItem('seclude_gmail_hint',u.email);}
-    }catch{}
   }
 
   function getToken(callback, silent=false){
@@ -2032,8 +2044,12 @@ function GmailSyncPanel({bookings,setBookings,isVisible}){
       ...(hint?{login_hint:hint}:{}),
       callback:(r)=>{
         if(r.access_token){
-          _gmailToken=r.access_token;setHasToken(true);
-          storeAccountHint(r.access_token); // remember this account for next time
+          _gmailToken=r.access_token;
+          saveTokenLS(r.access_token);   // persist so next reload skips picker
+          setHasToken(true);
+          // Also store email hint for future re-auths after token expires
+          fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+r.access_token}})
+            .then(res=>res.json()).then(u=>{if(u.email)localStorage.setItem('seclude_gmail_hint',u.email);}).catch(()=>{});
           callback(r.access_token);
         }else if(!silent){setStatus('error');}
       },
@@ -2043,19 +2059,20 @@ function GmailSyncPanel({bookings,setBookings,isVisible}){
   }
 
   function attemptAutoSync(){
-    // Skip if already syncing or if synced within cooldown window
     if(statusRef.current==='syncing'||statusRef.current==='connecting')return;
     const lastSyncTime=lastSync?new Date(lastSync).getTime():0;
     if(Date.now()-lastSyncTime<SYNC_COOLDOWN_MS)return;
     let cancelled=false;
     const attempt=(retries=0)=>{
       if(cancelled)return;
+      // Use saved/in-memory token if available — no popup
+      if(_gmailToken){runSync(_gmailToken);return;}
       if(!window.google?.accounts?.oauth2){
         if(retries<10)setTimeout(()=>attempt(retries+1),600);
         return;
       }
-      if(_gmailToken){runSync(_gmailToken);}
-      else{getToken(tok=>{if(!cancelled)runSync(tok);},/*silent=*/true);}
+      // Try silent token refresh (uses login_hint, no account picker)
+      getToken(tok=>{if(!cancelled)runSync(tok);},/*silent=*/true);
     };
     attempt();
     return()=>{cancelled=true;};
