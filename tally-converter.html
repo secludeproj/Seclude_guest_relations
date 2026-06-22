@@ -452,7 +452,7 @@ function normalizeRow(row){
     bookingSource:  pick(row,COL.bookingSource)||'',
     agentName:      pick(row,COL.agentName)||'',
     tallyStatus:    pick(row,COL.tallyStatus)||'',
-    invoiceAmt,
+    invoiceAmt:     invAmt,
     taxableAmt:     taxAmt,
     totalTax:       numVal(pick(row,COL.totalTax)),
     amtPaid:        numVal(pick(row,COL.amtPaid)),
