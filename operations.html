@@ -356,7 +356,12 @@ const ALL_PROPS=LOCATIONS.flatMap(l=>l.properties.map(p=>({...p,location:p.locat
 /* ══ INVENTORY ══════════════════════════════════════════════ */
 const INV={
   "pangot-perch":{
-    "Room Inventory":{rooms:["Blackbird","Blue Dasher","Butterfly","Dragonfly","Fireflies","Grasshopper","Ladybird","Queen Bee"],items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
+    "Room Inventory":{rooms:["Blackbird","Blue Dasher","Butterfly","Dragonfly","Fireflies","Grasshopper","Ladybird","Queen Bee"],
+      items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Luggage Box","Hanger","Full Mirror","Light & Lamps","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Coffee Book","Intercom"],
+      subSections:[
+        {label:"Guest Amenities",items:["Slippers","Toiletry Kit","Shower Cap","Cotton Pads","Sanitary Bag"]},
+        {label:"Washroom",items:["Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Hair Dryer","Soap Dispenser","Hand Wash Dispenser","Toothbrush Holder","Soap Dish","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Footstool","Bathroom Floor Mat","Bathroom Dustbin","Pedal Dustbin","Bathroom Fan"]}
+      ]},
     "Housekeeping":{subcats:{"Housekeeping Items":["Double Sheet","Single Sheet","Duvet Cover – Double","Duvet Cover – Single","Pillow Cover","Pillows","Blanket","Mattress Protector","Bed Runner","Double Duvet","Single Duvet","Bath Towel","Hand Towel","Bath Mat","Pool Towel","Spa Towel","Cushion Cover","Cushions"],"Equipment":["Walk Behind Scrubbing Machine","Hand Scrubbing Machine","Mop Trolley & Bucket","Extra Bed & Mattress","Iron Box","Iron","Hair Dryer","Heaters","Pedestal Fan","Electric Blanket","Umbrella"],"Other Store":["Folding Bed","Single Mattress","Roll Away Bed","Shower Gel","Shampoo","Hot Water Bags","Spin Mop"]}},
     "Dining":{subcats:{"Cutlery & Crockery":["Full Plate","Half Plate","B&B Plate","Soup Bowl","Monkey Bowl","Pasta Bowl (Large)","Pasta Bowl (Small)","Square Platter (Large)","Square Platter (Small)","2 Portion Bowl","1 Portion Bowl","Curry Bowl (Large)","Curry Bowl (Small)","Ice Cream Bowl","Water Glass","Juice Mug","High Ball Glass","Beer Mug","Whiskey Glass","Wine Glass","Tea Pot","Tea Cup","Saucer","Ap Spoon","Ap Fork","Ap Knife","Soup Spoon (Ceramic)","Soup Spoon (SS)","Tea Spoon","Service Spoon","Service Fork","Chafing Dish","Chafing Dish Pan (Large)","Chafing Dish Pan (Small)"],"Furniture":["Tables","Chairs","Cupboard"],"Table Setting & Decor":["Table Mats","Napkins","Napkin Ring","Candle Stand","Flower Vase"]}},
     "Kitchen":{subcats:{"Cooking Equipment":["Gas Stove","Gas Cylinder","Induction Cooktop","Microwave","OTG / Oven","Refrigerator","Deep Freezer","Exhaust Hood","Mixer / Grinder","Food Processor"],"Cookware":["Pressure Cooker","Wok / Kadai","Pots & Pans Set","Baking Tray","Ladle Set","Mixing Bowls","Chopping Board","Knife Set","Colander","Strainer"],"Kitchen Store":["Storage Containers","Spice Rack","Water Filter","Cling Wrap","Aluminium Foil","Garbage Bags"]}},
@@ -364,7 +369,12 @@ const INV={
     "Assets":{subcats:{"Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","Genset","Invertor","Invertor Battery","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","UPS","Solar Panels"]}}
   },
   "willows":{
-    "Room Inventory":{rooms:["Blue Poppies","Happy hydrengia","Olive branch","Lazy lillies","Sweet irish","Cherry blossom","Birds of paradise","Honey butter cup","Rustic rose","Dainty Daisy","Snow Drop"],items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table","Cupboard","Luggage Box","Hanger","Coffee Book","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","Intercom","AC & Remote","Tea Condiments Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom Condition","Door (Painted & Clean)","Latch","Handle","Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Mirror (Bathroom)","Towel Rack","Wall Mount Dispenser","Bucket Set","Dustbin Lining (Bath)","Bathroom Fan","Bathroom Foot Stool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish Stone","Bathroom Floor Mat"]},
+    "Room Inventory":{rooms:["Blue Poppies","Happy Hydrangea","Olive Branch","Lazy Lillies","Sweet Irish","Cherry Blossom","Birds of Paradise","Honey Buttercup","Rustic Rose","Dainty Daisy","Snow Drop"],
+      items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table","Cupboard","Luggage Box","Hanger","Full Mirror","Light & Lamps","TV & Remote","Intercom","AC & Remote","Tea Condiments Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Coffee Book"],
+      subSections:[
+        {label:"Guest Amenities",items:["Slippers","Toiletry Kit","Shower Cap","Cotton Pads","Sanitary Bag"]},
+        {label:"Washroom",items:["Washroom Condition","Door (Painted & Clean)","Latch","Handle","Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Hair Dryer","Soap Dispenser","Hand Wash Dispenser","Soap Dish Stone","Toothbrush Holder","Mirror (Bathroom)","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Foot Stool","Bathroom Floor Mat","Dustbin Lining (Bath)","Pedal Dustbin","Bathroom Fan"]}
+      ]},
     "Housekeeping":{subcats:{"Housekeeping Items":["Double Sheet","Single Sheet","Duvet Cover – Double","Duvet Cover – Single","Pillow Cover","Pillows","Blanket","Mattress Protector","Bed Runner","Bath Towel","Hand Towel","Bath Mat","Pool Towel","Spa Towel","Cushion Cover","Cushions"],"Equipment":["Walk Behind Scrubbing Machine","Hand Scrubbing Machine","Mop Trolley & Bucket","Iron Box","Hair Dryer","Iron","Heaters","Pedestal Fan","Electric Blanket","Popcorn Machine","Telescope with Stand","JBL Speaker (Large)","JBL Speaker (Small)","Induction Plate"],"Other Store":["Folding Bed","Single Mattress","Roll Away Bed","Umbrella","Shower Gel","Shampoo","Hot Water Bags","Spin Mop","Extension Pipe"]}},
     "Dining":{subcats:{"Cutlery & Crockery":["Full Plate","Half Plate","B&B Plate","Soup Bowl","Monkey Bowl","Pasta Bowl (Large)","Pasta Bowl (Small)","Square Platter (Large)","Oval Platter (Small)","Water Glass","Juice Mug","Beer Mug","Wine Glass","Tea Cup","Saucer","Service Spoon","Service Fork","Tea Spoon","Ap Spoon","Ap Fork","Ap Knife","Soup Spoon","Chafing Dish","Chafing Dish Pan (Large)","Chafing Dish Pan (Small)"],"Furniture":["Tables","Chair","Cupboard"],"Table Setting & Decor":["Table Mats","Napkins","Napkin Ring","Candle Stand","Flower Vase"]}},
     "Kitchen":{subcats:{"Cooking Equipment":["Gas Stove","Gas Cylinder","Induction Cooktop","Microwave","OTG / Oven","Refrigerator","Deep Freezer","Exhaust Hood","Mixer / Grinder","Food Processor"],"Cookware":["Pressure Cooker","Wok / Kadai","Pots & Pans Set","Baking Tray","Ladle Set","Mixing Bowls","Chopping Board","Knife Set","Colander","Strainer"],"Kitchen Store":["Storage Containers","Spice Rack","Water Filter","Cling Wrap","Aluminium Foil","Garbage Bags"]}},
@@ -374,7 +384,13 @@ const INV={
 };
 ["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","blue-villa","sunrise-villa","green-villa","falling-cashews","cliffs-edge"].forEach(pid=>{
   INV[pid]={
-    "Room Inventory":{rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
+    "Room Inventory":{
+      rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),
+      items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Luggage Box","Hanger","Full Mirror","Light & Lamps","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Coffee Book","Intercom"],
+      subSections:[
+        {label:"Guest Amenities",items:["Slippers","Toiletry Kit","Shower Cap","Cotton Pads","Sanitary Bag"]},
+        {label:"Washroom",items:["Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Hair Dryer","Soap Dispenser","Hand Wash Dispenser","Toothbrush Holder","Soap Dish","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Footstool","Bathroom Floor Mat","Bathroom Dustbin","Pedal Dustbin","Bathroom Fan"]}
+      ]},
     "Housekeeping":{subcats:{
       "Housekeeping Items":["Double Sheet","Single Sheet","Duvet Cover – Double","Duvet Cover – Single","Pillow Cover","Pillows","Blanket","Mattress Protector","Bed Runner","Double Duvet","Single Duvet","Bath Towel","Hand Towel","Bath Mat","Pool Towel","Spa Towel","Cushion Cover","Cushions"],
       "Equipment":["Walk Behind Scrubbing Machine","Hand Scrubbing Machine","Mop Trolley & Bucket","Extra Bed & Mattress","Iron Box","Iron","Hair Dryer","Heaters","Pedestal Fan","Electric Blanket","Umbrella","Popcorn Machine"],
@@ -583,15 +599,23 @@ function useIsMobile(){
 function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readOnly,customItems,setCustomItems,editItems}){
   const[lightbox,setLightbox]=useState(null);
   const[addInputs,setAddInputs]=useState({});
+  const[dragRoom,setDragRoom]=useState(null);
+  const[dragOverRoom,setDragOverRoom]=useState(null);
   const isMobile=useIsMobile();
   const mk=monthKey(yr,mn);
   const propInv=INV[propId]||{};
   const areaData=propInv[area]||{};
   const isRoom=area==="Room Inventory";
-  const rooms=isRoom?(areaData.rooms||[]):[];
-  // Merge custom items into subcats/items
   const cPropItems=(customItems&&customItems[propId]&&customItems[propId][area])||{};
   const deleted=cPropItems["__deleted"]||[];
+
+  // Room order: use custom order if set, else default
+  const defaultRooms=isRoom?(areaData.rooms||[]):[];
+  const customRoomOrder=isRoom?(cPropItems["__roomOrder"]||null):null;
+  const rooms=isRoom
+    ?(customRoomOrder&&customRoomOrder.length?[...new Set([...customRoomOrder,...defaultRooms])].filter(r=>defaultRooms.includes(r)):defaultRooms)
+    :[];
+
   let items=isRoom?[...(areaData.items||[])]:[];
   let subcats=isRoom?null:{...(areaData.subcats||{})};
   if(isRoom){
@@ -599,15 +623,41 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
     items=[...new Set([...items,...cRoom])].filter(i=>!deleted.includes(i));
   }else{
     Object.entries(cPropItems).forEach(([sc,its])=>{
-      if(sc==="__room"||sc==="__deleted")return;
+      if(sc==="__room"||sc==="__deleted"||sc.startsWith("__"))return;
       subcats[sc]=[...new Set([...(subcats[sc]||[]),...its])];
     });
     if(subcats)Object.keys(subcats).forEach(sc=>{subcats[sc]=subcats[sc].filter(i=>!deleted.includes(i));});
   }
 
+  // Drag-to-reorder room columns (edit mode only)
+  function handleRoomDragStart(e,r){setDragRoom(r);e.dataTransfer.effectAllowed="move";}
+  function handleRoomDragOver(e,r){e.preventDefault();setDragOverRoom(r);}
+  function handleRoomDrop(e,target){
+    e.preventDefault();
+    if(!dragRoom||dragRoom===target||!setCustomItems)return;
+    const ordered=[...rooms];
+    const fi=ordered.indexOf(dragRoom);const ti=ordered.indexOf(target);
+    ordered.splice(fi,1);ordered.splice(ti,0,dragRoom);
+    setCustomItems(prev=>{
+      const n=JSON.parse(JSON.stringify(prev||{}));
+      if(!n[propId])n[propId]={};if(!n[propId][area])n[propId][area]={};
+      n[propId][area]["__roomOrder"]=ordered;return n;
+    });
+    setDragRoom(null);setDragOverRoom(null);
+  }
+  function handleRoomDragEnd(){setDragRoom(null);setDragOverRoom(null);}
+
   function removeItem(item,subcat){
     if(!setCustomItems)return;
-    const origDef=isRoom?(INV[propId]?.[area]?.items||[]):(subcat?(INV[propId]?.[area]?.subcats?.[subcat]||[]):[]);
+    // subcat starting with __ss_ = subsection item
+    const isSSKey=subcat&&subcat.startsWith("__ss_");
+    let origDef;
+    if(isSSKey){
+      const label=subcat.replace("__ss_","");
+      origDef=(INV[propId]?.[area]?.subSections||[]).find(s=>s.label===label)?.items||[];
+    }else{
+      origDef=isRoom?(INV[propId]?.[area]?.items||[]):(subcat?(INV[propId]?.[area]?.subcats?.[subcat]||[]):[]);
+    }
     const isDef=origDef.includes(item);
     setCustomItems(prev=>{
       const n=JSON.parse(JSON.stringify(prev||{}));
@@ -719,7 +769,14 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
         <thead>
           {isRoom&&<tr>
             <th className="item-col-head" rowSpan={2}>Item</th>
-            {rooms.map(r=><th key={r} className="room-hd" colSpan={isMobile?2:3}>{r}</th>)}
+            {rooms.map(r=><th key={r} className="room-hd" colSpan={isMobile?2:3}
+              draggable={!!editItems}
+              onDragStart={editItems?e=>handleRoomDragStart(e,r):undefined}
+              onDragOver={editItems?e=>handleRoomDragOver(e,r):undefined}
+              onDrop={editItems?e=>handleRoomDrop(e,r):undefined}
+              onDragEnd={editItems?handleRoomDragEnd:undefined}
+              style={{cursor:editItems?"grab":"default",opacity:dragOverRoom===r&&dragRoom!==r?.6:1,outline:dragOverRoom===r&&dragRoom!==r?"2px dashed #0F5C4C":"none",transition:"opacity .15s"}}
+            >{editItems?<span title="Drag to reorder">⠿ {r}</span>:r}</th>)}
             {editItems&&<th rowSpan={2} style={{width:28}}/>}
           </tr>}
           {isRoom&&<tr>
@@ -739,23 +796,63 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
         </thead>
         <tbody>
           {isRoom
-            ?[...items.map(item=><tr key={item}>
-              <td className="item-col">{item}</td>
-              {rooms.map(room=>{
-                const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
-                return<React.Fragment key={room}>
-                  <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,room)} title={readOnly?"":"Click to change"}>
-                    <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
-                  </td>
-                  <td className="qty-cell">
-                    <input className="qty-inp" type="number" min="0" value={qty} placeholder="0" readOnly={readOnly} onChange={e=>setV(item,room,"qty",e.target.value)}/>
-                  </td>
-                  {!isMobile&&<PhotoCell item={item} room={room}/>}
-                </React.Fragment>;
-              })}
-              {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
-            </tr>),
-            ...(editItems?[<AddRow key="__add_room" subcat={null} colSpan={1+rooms.length*(isMobile?2:3)+1}/>]:[])
+            ?[
+              // Main room items
+              ...items.map(item=><tr key={item}>
+                <td className="item-col">{item}</td>
+                {rooms.map(room=>{
+                  const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
+                  return<React.Fragment key={room}>
+                    <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,room)} title={readOnly?"":"Click to change"}>
+                      <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
+                    </td>
+                    <td className="qty-cell">
+                      <input className="qty-inp" type="number" min="0" value={qty} placeholder="0" readOnly={readOnly} onChange={e=>setV(item,room,"qty",e.target.value)}/>
+                    </td>
+                    {!isMobile&&<PhotoCell item={item} room={room}/>}
+                  </React.Fragment>;
+                })}
+                {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
+              </tr>),
+              ...(editItems?[<AddRow key="__add_room" subcat={null} colSpan={1+rooms.length*(isMobile?2:3)+1}/>]:[]),
+              // Sub-sections: Guest Amenities, Washroom, etc.
+              ...(areaData.subSections||[]).flatMap(ss=>{
+                const ssKey="__ss_"+ss.label;
+                const ssItems=[...(ss.items||[]).filter(i=>!deleted.includes(i)),...(cPropItems[ssKey]||[])];
+                const colCount=rooms.length*(isMobile?2:3);
+                return[
+                  // Sub-section header row
+                  <tr key={"ss-hd-"+ss.label}>
+                    <td className="item-col" style={{background:"#E8F3F0",color:"var(--g)",fontWeight:700,fontSize:".7rem",letterSpacing:".07em",textTransform:"uppercase",padding:"6px 12px",borderTop:"2px solid var(--gl)"}}>
+                      {ss.label}
+                    </td>
+                    {rooms.map(r=><React.Fragment key={r}>
+                      <td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>
+                      <td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>
+                      {!isMobile&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
+                    </React.Fragment>)}
+                    {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
+                  </tr>,
+                  // Sub-section items
+                  ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item}>
+                    <td className="item-col" style={{paddingLeft:22}}>{item}</td>
+                    {rooms.map(room=>{
+                      const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
+                      return<React.Fragment key={room}>
+                        <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,room)} title={readOnly?"":"Click to change"}>
+                          <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
+                        </td>
+                        <td className="qty-cell">
+                          <input className="qty-inp" type="number" min="0" value={qty} placeholder="0" readOnly={readOnly} onChange={e=>setV(item,room,"qty",e.target.value)}/>
+                        </td>
+                        {!isMobile&&<PhotoCell item={item} room={room}/>}
+                      </React.Fragment>;
+                    })}
+                    {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,ssKey)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
+                  </tr>),
+                  ...(editItems?[<AddRow key={"__add_"+ssKey} subcat={ssKey} colSpan={1+colCount+(editItems?1:0)}/>]:[])
+                ];
+              })
             ]
             :subcats
               ?Object.entries(subcats).flatMap(([sub,sitems])=>[
