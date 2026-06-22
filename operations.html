@@ -345,8 +345,11 @@ const LOCATIONS=[
   {id:"kerala",name:"Kerala",icon:"🌴",state:"Kerala",properties:[
     {id:"karthika-nivas",name:"Karthika Nivas",type:"Heritage Home",location:"Thrissur",rooms:["Tejas","Vayu","Akash","Prithvi","Apas"]},
     {id:"marari-sand",name:"Marari Sand",type:"Private Cottages",location:"Marari",rooms:["Royal Villa 1","Royal Villa 2","Royal Villa 3","Royal Villa 4","Royal Villa 5","Royal Villa 6","Premium Villa 1","Premium Villa 2","Premium Villa 3","Pool View 1","Pool View 2","Pool View 3","Pool View 4"]},
-    {id:"beach-house",name:"Beach House",type:"Beach House",location:"Kattoor Beach",rooms:["Pristine","Barefoot"]},
-    {id:"by-the-lake",name:"By the Lake",type:"Villa",location:"Alleppey",rooms:["Blue Villa","Sunrise Villa","Green Villa"]}]},
+    {id:"beach-house",name:"Beach House",type:"Beach House",location:"Kattoor Beach",rooms:["Pristine","Barefoot"]}]},
+  {id:"alleppey",name:"Alleppey · By the Lake",icon:"🛶",state:"Kerala",properties:[
+    {id:"blue-villa",name:"Blue Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Room 1","Room 2","Room 3","Room 4"]},
+    {id:"sunrise-villa",name:"Sunrise Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Room 1","Room 2","Room 3","Room 4"]},
+    {id:"green-villa",name:"Green Villa",type:"Villa · By the Lake",location:"Alleppey",rooms:["Room 1","Room 2"]}]},
 ];
 const ALL_PROPS=LOCATIONS.flatMap(l=>l.properties.map(p=>({...p,location:p.location||l.name,locationId:l.id,locationName:l.name,locIcon:l.icon})));
 
@@ -369,7 +372,7 @@ const INV={
     "Assets":{subcats:{"Fixed Assets":["CCTV Cameras","CCTV DVR / Recorder","CCTV Recorder","UPS","Genset","Invertor","Invertor Battery","Batteries","Fire Extinguisher","Water Pump","Cycles","Washing Machine","EV Charger","Solar Panels"]}}
   },
 };
-["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","by-the-lake","falling-cashews","cliffs-edge"].forEach(pid=>{
+["mussoorie","taraview","bantony-cottage","two-stones","one-love","tea-estate","taradale","annies-song","karthika-nivas","hampi-1800","pangot-perch","willows","marari-sand","beach-house","blue-villa","sunrise-villa","green-villa","falling-cashews","cliffs-edge"].forEach(pid=>{
   INV[pid]={
     "Room Inventory":{rooms:(()=>{const x=ALL_PROPS.find(p=>p.id===pid);return x?x.rooms:[];})(),items:["WiFi Speed","Key Chain","Door Lock","Doormat","Dustbin Lining","Curtains","Bed","Pillow","Carpet","Cushions","Throws","Side Table Items","Cupboard","Full Mirror","Light & Lamps","Guest Amenities","Slippers","TV & Remote","AC & Remote","Room Tray","Cups","Glasses","Tea Boxes","Water Bottles","Electric Kettle","Tissue Box","Coasters","Spoon","Butler Card","Menu","Washroom","Door Condition","Latch","Handle","Bathroom Lights","Exhaust Fan","Geyser","Basin","Fragrance Candle","Taps & Shower","Soap Dispenser","Toothbrush Holder","Bathroom Mirror","Towel Rack","Wall Mount Dispenser","Bucket Set","Bathroom Dustbin","Bathroom Fan","Bathroom Footstool","Pedal Dustbin","Hand Wash Dispenser","Soap Dish","Bathroom Floor Mat","Hair Dryer","Luggage Box","Hanger","Coffee Book","Intercom"]},
     "Housekeeping":{subcats:{
@@ -475,7 +478,9 @@ const PM_LOGINS={
   "karthika-nivas":{pin:"KN2026"},
   "marari-sand":{pin:"MR2026"},
   "beach-house":{pin:"BH2026"},
-  "by-the-lake":{pin:"BL2026"},
+  "blue-villa":{pin:"BV2026"},
+  "sunrise-villa":{pin:"SV2026"},
+  "green-villa":{pin:"GV2026"},
   "falling-cashews":{pin:"FC2026"},
   "cliffs-edge":{pin:"CE2026"},
   "hampi-1800":{pin:"HM2026"},
@@ -488,6 +493,7 @@ const HQ_USERS=[
 ];
 const INIT_PROC=[];
 const INIT_EXP=[];
+const INIT_RECEIVED=[];
 
 /* ══ LIGHTBOX ═══════════════════════════════════════════════ */
 function Lightbox({src,onClose}){
@@ -840,7 +846,7 @@ function PMRequestForm({session,onClose,onSubmit}){
 }
 
 /* ══ INVENTORY RECEIVED MODAL ═══════════════════════════════ */
-function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,requests,setRequests,proc,setProc,onClose}){
+function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,requests,setRequests,proc,setProc,received,setReceived,onClose}){
   const propId=session.propId;
   const propInv=INV[propId]||{};
   const[selArea,setSelArea]=useState("Room Inventory");
@@ -918,6 +924,23 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,r
       });
     }
 
+    // Always log to received inventory list (visible to both PM and HQ)
+    if(setReceived){
+      const prop=ALL_PROPS.find(p=>p.id===propId);
+      setReceived(prev=>[{
+        id:receiptId,
+        date:new Date().toISOString().slice(0,10),
+        item,qty,
+        area:selArea,
+        propId,propName:prop?.name||propId,
+        receivedBy:session.submitter||session.name||"—",
+        vendor:vendor||"—",
+        price:price?parseFloat(price)||0:null,
+        invoiceNo:invoiceNo||"",
+        linkedRequestId:linkedReqId||null,
+      },...(prev||[])]);
+    }
+
     // Auto-resolve linked request and mark receipt ID on it
     if(linkedReqId){
       setRequests(prev=>prev.map(r=>r.id===Number(linkedReqId)||r.id===linkedReqId
@@ -983,7 +1006,7 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,r
 }
 
 /* ══ PM PORTAL ══════════════════════════════════════════════ */
-function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc}){
+function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc,received,setReceived}){
   const[area,setArea]=useState("Room Inventory");
   const today=todayYMD();
   const[yr,setYr]=useState(today.y);
@@ -997,7 +1020,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
   return(
     <div id="pm-wrap">
       {showReqForm&&<PMRequestForm session={session} onClose={()=>setShowReqForm(false)} onSubmit={req=>setRequests(prev=>[req,...(prev||[])])}/>}
-      {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} requests={requests} setRequests={setRequests} proc={proc} setProc={setProc} onClose={()=>setShowInvForm(false)}/>}
+      {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} requests={requests} setRequests={setRequests} proc={proc} setProc={setProc} received={received} setReceived={setReceived} onClose={()=>setShowInvForm(false)}/>}
       <div className="pm-header">
         <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
           <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
@@ -1031,13 +1054,70 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
             <div style={{fontSize:".68rem",color:"var(--ink3)",whiteSpace:"nowrap",fontFamily:"var(--fm)"}}>{r.date}</div>
           </div>)}
         </div>}
+        {/* Received inventory log for this property */}
+        {(received||[]).filter(r=>r.propId===session.propId).length>0&&(
+          <div style={{marginTop:24,background:"var(--white)",border:"1px solid var(--line)",borderRadius:12,padding:"14px 16px"}}>
+            <ReceivedLog received={(received||[]).filter(r=>r.propId===session.propId)} showProp={false}/>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+/* ══ RECEIVED INVENTORY LOG ════════════════════════════════ */
+function ReceivedLog({received,showProp=true}){
+  const[filterProp,setFilterProp]=useState("");
+  const list=(received||[]).filter(r=>!filterProp||r.propId===filterProp);
+  const props=[...new Map((received||[]).map(r=>[r.propId,r.propName])).entries()];
+  const fmtD=d=>{try{return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});}catch{return d;}};
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div className="pg-title" style={{marginBottom:0}}>Inventory Received</div>
+        {showProp&&props.length>1&&<select value={filterProp} onChange={e=>setFilterProp(e.target.value)} style={{border:"1px solid var(--line)",borderRadius:7,padding:"5px 10px",fontSize:".78rem",background:"var(--white)"}}>
+          <option value="">All Properties</option>
+          {props.map(([id,name])=><option key={id} value={id}>{name}</option>)}
+        </select>}
+      </div>
+      {list.length===0?<div style={{textAlign:"center",padding:"40px 20px",color:"var(--ink3)",fontSize:".85rem"}}>No inventory received yet.</div>:(
+        <div style={{overflowX:"auto"}}>
+          <table className="ltbl" style={{fontSize:".78rem"}}>
+            <thead><tr style={{background:"var(--stone)"}}>
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)",whiteSpace:"nowrap"}}>Date</th>
+              {showProp&&<th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)"}}>Property</th>}
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)"}}>Item</th>
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)"}}>Area</th>
+              <th style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:"var(--ink2)"}}>Qty</th>
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)"}}>Vendor</th>
+              <th style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:"var(--ink2)"}}>Price</th>
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)"}}>Received By</th>
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"var(--ink2)"}}>Invoice</th>
+            </tr></thead>
+            <tbody>
+              {list.map((r,i)=>(
+                <tr key={r.id} style={{borderBottom:"1px solid var(--line)",background:i%2===0?"var(--white)":"var(--stone)"}}>
+                  <td style={{padding:"8px 12px",whiteSpace:"nowrap",fontFamily:"var(--fm)",color:"var(--ink3)"}}>{fmtD(r.date)}</td>
+                  {showProp&&<td style={{padding:"8px 12px",fontWeight:600}}>{r.propName}</td>}
+                  <td style={{padding:"8px 12px",fontWeight:600}}>{r.item}</td>
+                  <td style={{padding:"8px 12px",color:"var(--ink2)"}}>{r.area}</td>
+                  <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"var(--fm)"}}>{r.qty}</td>
+                  <td style={{padding:"8px 12px",color:"var(--ink3)"}}>{r.vendor||"—"}</td>
+                  <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"var(--fm)"}}>{r.price!=null?`₹${Number(r.price).toLocaleString("en-IN")}`:"—"}</td>
+                  <td style={{padding:"8px 12px",color:"var(--ink3)"}}>{r.receivedBy}</td>
+                  <td style={{padding:"8px 12px",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{r.invoiceNo||"—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══ HQ APP ═════════════════════════════════════════════════ */
-function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc}){
+function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc,received,setReceived}){
   const[page,setPage]=useState("dashboard");
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
@@ -1055,6 +1135,7 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
     {id:"dashboard",label:"Dashboard"},
     {id:"properties",label:"Properties"},
     {id:"requests",label:"Requests",badge:pendingReqs||null},
+    {id:"received",label:"Received"},
     {id:"purchases",label:"Purchases"},
     {id:"expenses",label:"Expenses"},
     {id:"reports",label:"Reports"},
@@ -1095,6 +1176,7 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
             {page==="properties"&&!selProp&&<><span>›</span><b>Properties</b></>}
             {page==="properties"&&curProp&&<><span>›</span><span className="lk" onClick={()=>setSelProp(null)}>Properties</span><span>›</span><b>{curProp.name}</b></>}
             {page==="requests"&&<><span>›</span><b>Requests</b></>}
+            {page==="received"&&<><span>›</span><b>Received</b></>}
             {page==="purchases"&&<><span>›</span><b>Purchases</b></>}
             {page==="expenses"&&<><span>›</span><b>Expenses</b></>}
             {page==="reports"&&<><span>›</span><b>Reports</b></>}
@@ -1116,7 +1198,8 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
           {page==="dashboard"&&<HQDashboard requests={requests||[]} proc={proc} exp={exp} onNav={nav}/>}
           {page==="properties"&&!selProp&&<HQPropList onSelect={p=>nav("properties",{prop:p})}/>}
           {page==="properties"&&curProp&&<HQPropDetail prop={curProp} area={propArea} setArea={setPropArea} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} yr={yr} mn={mn} setYr={setYr} setMn={setMn} onBack={()=>setSelProp(null)} customItems={customItems} setCustomItems={setCustomItems}/>}
-          {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests} proc={proc} setProc={setProc}/>}
+          {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests} proc={proc} setProc={setProc} received={received} setReceived={setReceived}/>}
+          {page==="received"&&<ReceivedLog received={received} showProp={true}/>}
           {page==="purchases"&&<HQPurchases proc={proc} setProc={setProc}/>}
           {page==="expenses"&&<HQExpenses exp={exp} setExp={setExp}/>}
           {page==="reports"&&<HQReports proc={proc} exp={exp}/>}
@@ -1262,7 +1345,7 @@ function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn
 }
 
 /* ══ HQ REQUESTS ════════════════════════════════════════════ */
-function HQRequests({requests,setRequests,proc,setProc}){
+function HQRequests({requests,setRequests,proc,setProc,received,setReceived}){
   const[filter,setFilter]=useState("All");
   const[purchaseForm,setPurchaseForm]=useState({}); // {reqId: {price,vendor,invoiceNo}}
   const statuses=["All","Pending","In Progress","Resolved"];
@@ -1288,6 +1371,8 @@ function HQRequests({requests,setRequests,proc,setProc}){
       warranty:"",sourceType:"from_request",linkedRequestId:r.id,addedBy:"HQ"
     }]);
     setRequests(prev=>prev.map(x=>x.id===r.id?{...x,status:"Resolved",linkedReceiptId:newId}:x));
+    // Also log to received inventory list
+    if(setReceived){setReceived(prev=>[{id:newId,date:new Date().toISOString().slice(0,10),item:r.item,qty:parseFloat(r.qty)||1,area:r.area||"",propId:r.propId,propName:r.propName,receivedBy:"HQ",vendor:pf.vendor||"—",price:parseFloat(pf.price)||0,invoiceNo:pf.invoiceNo||"",linkedRequestId:r.id},...(prev||[])]);}
     setPurchaseForm(prev=>{const n={...prev};delete n[r.id];return n;});
   }
 
@@ -1926,6 +2011,7 @@ function App(){
   const[requests,setRequests]=useFirestore("seclude_requests",[],500);
   const[customItems,setCustomItems]=useFirestore("seclude_custom_items",{},1000);
   const[proc,setProc]=useFirestore("seclude_proc_v2",INIT_PROC,500);
+  const[received,setReceived]=useFirestore("seclude_received",INIT_RECEIVED,500);
   const[officeItems,setOfficeItems]=useFirestore("seclude_office_items",{},1000);
   // Keep session alive in sessionStorage so reload never loses PM/HQ state
   useEffect(()=>{
@@ -1961,9 +2047,9 @@ function App(){
     localStorage.setItem("seclude_seeded_v4","1");
   },[]);
   if(!session)return<Login onLogin={handleLogin}/>;
-  if(session.type==="pm")return<PMPortal session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc}/>;
+  if(session.type==="pm")return<PMPortal session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc} received={received} setReceived={setReceived}/>;
   if(session.type==="office")return<OfficeStorage session={session} onLogout={handleLogout} officeItems={officeItems} setOfficeItems={setOfficeItems}/>;
-  return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc}/>;
+  return<HQApp session={session} onLogout={handleLogout} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} requests={requests} setRequests={setRequests} customItems={customItems} setCustomItems={setCustomItems} proc={proc} setProc={setProc} received={received} setReceived={setReceived}/>;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
