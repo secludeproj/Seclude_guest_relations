@@ -116,6 +116,30 @@ tr:hover td{background:#f7fbf9}
 .xml-preview .attr{color:#fbbf24}
 .xml-preview .val{color:#86efac}
 
+/* ── Tabs ── */
+.tab-btn{background:none;border:none;border-bottom:3px solid transparent;padding:10px 18px;font-family:var(--ff);font-size:.82rem;font-weight:600;color:var(--ink3);cursor:pointer;margin-bottom:-2px;transition:all .12s}
+.tab-btn:hover{color:var(--ink)}
+.tab-btn.active{color:var(--green);border-bottom-color:var(--green)}
+
+/* ── Audit panel ── */
+.audit-section{margin-bottom:20px}
+.audit-section-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--green3)}
+.audit-pass{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0;border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:.82rem;font-weight:600;margin-bottom:12px}
+.audit-fail{background:var(--red2);color:var(--red);border:1px solid #fecaca;border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:.82rem;font-weight:600;margin-bottom:12px}
+.audit-score{display:flex;align-items:center;gap:16px;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:14px 20px;margin-bottom:16px}
+.audit-score-num{font-size:2rem;font-weight:800;line-height:1}
+.audit-score-label{font-size:.75rem;color:var(--ink3)}
+.audit-score.all-pass .audit-score-num{color:var(--green)}
+.audit-score.has-fail .audit-score-num{color:var(--red)}
+.chk{display:inline-block;width:18px;height:18px;border-radius:50%;text-align:center;line-height:18px;font-size:.68rem;font-weight:800;flex-shrink:0}
+.chk-pass{background:#d1fae5;color:#065f46}
+.chk-fail{background:var(--red2);color:var(--red)}
+.chk-warn{background:#fef3c7;color:#92400e}
+.prop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+.prop-card2{background:var(--white);border:1px solid var(--line);border-radius:9px;padding:12px 14px}
+.prop-card2-name{font-weight:700;font-size:.82rem;color:var(--ink);margin-bottom:4px}
+.prop-card2-stats{font-size:.72rem;color:var(--ink3)}
+
 @media(max-width:600px){
   .wrap{padding:16px 12px 40px}
   .card{padding:16px}
@@ -243,39 +267,57 @@ tr:hover td{background:#f7fbf9}
   <div id="preview-area" style="display:none">
     <!-- Stats -->
     <div class="stats-bar" id="stats-bar"></div>
-
     <!-- Notices -->
     <div id="notices"></div>
 
-    <!-- Table -->
-    <div class="card" style="padding:0">
-      <div style="padding:16px 20px 0;display:flex;align-items:center;justify-content:between;gap:12px">
-        <div class="card-title" style="margin:0;flex:1">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-          Invoice Preview
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:20px">
+      <button class="tab-btn active" id="tab-preview" onclick="switchTab('preview')">📋 Preview</button>
+      <button class="tab-btn" id="tab-audit" onclick="switchTab('audit')">🔍 Accuracy Audit</button>
+      <button class="tab-btn" id="tab-xml" onclick="switchTab('xml')">⟨/⟩ XML</button>
+    </div>
+
+    <!-- Preview table (existing) -->
+    <div id="pane-preview">
+      <div class="card" style="padding:0">
+        <div style="padding:16px 20px 0;display:flex;align-items:center;gap:12px">
+          <div class="card-title" style="margin:0;flex:1">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+            Invoice Preview
+          </div>
+          <div style="font-size:.75rem;color:var(--ink3)" id="row-count"></div>
         </div>
-        <div style="font-size:.75rem;color:var(--ink3)" id="row-count"></div>
+        <div class="tbl-wrap" style="margin-top:12px">
+          <table id="preview-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Invoice No.</th>
+                <th>Date</th>
+                <th>Property</th>
+                <th>Guest</th>
+                <th>Type</th>
+                <th>Taxable (₹)</th>
+                <th>GST</th>
+                <th class="right">Total (₹)</th>
+                <th>Tally Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="preview-tbody"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="tbl-wrap" style="margin-top:12px">
-        <table id="preview-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Invoice No.</th>
-              <th>Date</th>
-              <th>Property</th>
-              <th>Guest</th>
-              <th>Type</th>
-              <th>Taxable (₹)</th>
-              <th>GST</th>
-              <th class="right">Total (₹)</th>
-              <th>Tally Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="preview-tbody"></tbody>
-        </table>
-      </div>
+    </div>
+
+    <!-- Audit pane -->
+    <div id="pane-audit" style="display:none">
+      <div id="audit-content"></div>
+    </div>
+
+    <!-- XML pane -->
+    <div id="pane-xml" style="display:none">
+      <div class="xml-preview show" id="xml-preview" style="max-height:500px"></div>
     </div>
 
     <!-- Action row -->
@@ -284,13 +326,8 @@ tr:hover td{background:#f7fbf9}
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download Tally XML
       </button>
-      <button class="btn-secondary" onclick="toggleXMLPreview()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-        Preview XML
-      </button>
       <span class="action-info" id="action-info"></span>
     </div>
-    <div class="xml-preview" id="xml-preview"></div>
   </div>
 </div>
 
@@ -683,12 +720,172 @@ function downloadXML(){
   URL.revokeObjectURL(url);
 }
 
-function toggleXMLPreview(){
-  if(!parsedRows.length){alert('Upload a file first.');return;}
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+function switchTab(tab){
+  ['preview','audit','xml'].forEach(t=>{
+    document.getElementById('pane-'+t).style.display = t===tab?'block':'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab==='audit') renderAudit();
+  if(tab==='xml') renderXMLPreview();
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+function auditRows(){
+  const TOLERANCE = 0.05; // allow ₹0.05 rounding gap
+  return parsedRows.map(r=>{
+    const cr = round2(r.taxableAmt + r.cgst9 + r.sgst9 + r.cgst25 + r.sgst25);
+    const dr = round2(r.invoiceAmt);
+    const diff = round2(Math.abs(dr - cr));
+    const balanceOk = diff <= TOLERANCE;
+
+    // Date check
+    const dateOk = !!fmtTallyDate(r.invoiceDate);
+
+    // Party name check
+    const partyOk = !!(r.partyName||r.guestName||'').trim();
+
+    // Tax logic check: at least one tax must be present if invoiceAmt > taxableAmt
+    const hasTax = r.cgst9||r.sgst9||r.cgst25||r.sgst25;
+    const taxExpected = r.totalTax > 0;
+    const taxOk = !taxExpected || !!hasTax;
+
+    // Invoice number check
+    const invOk = !!(r.invoiceNum||'').trim();
+
+    const pass = balanceOk && dateOk && partyOk && taxOk && invOk;
+    return {r, cr, dr, diff, balanceOk, dateOk, partyOk, taxOk, invOk, pass};
+  });
+}
+
+function renderAudit(){
+  const results = auditRows();
+  const total = results.length;
+  const passed = results.filter(x=>x.pass).length;
+  const failed = total - passed;
+  const allPass = failed === 0;
+
+  // Per-property breakdown
+  const byProp = {};
+  results.forEach(x=>{
+    const p = shortProp(x.r.property)||'Unknown';
+    if(!byProp[p]) byProp[p]={total:0,pass:0,revenue:0};
+    byProp[p].total++;
+    if(x.pass) byProp[p].pass++;
+    byProp[p].revenue += x.r.invoiceAmt;
+  });
+
+  let html = '';
+
+  // Overall score
+  html += `<div class="audit-score ${allPass?'all-pass':'has-fail'}">
+    <div>
+      <div class="audit-score-num">${passed}/${total}</div>
+      <div class="audit-score-label">Vouchers passed all checks</div>
+    </div>
+    <div style="flex:1;font-size:.82rem;color:var(--ink2)">
+      ${allPass
+        ? '✅ <strong>All vouchers are accurate.</strong> Safe to import into Tally.'
+        : `⚠️ <strong>${failed} voucher${failed>1?'s':''} have issues</strong> — review the table below before importing.`}
+    </div>
+  </div>`;
+
+  // Checks legend
+  html += `<div class="audit-section">
+    <div class="audit-section-title">What each check means</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;font-size:.78rem;color:var(--ink2)">
+      <div><span class="chk chk-pass">B</span> <strong>Balance</strong> — Dr (invoice total) = Cr (taxable + all taxes) within ₹0.05</div>
+      <div><span class="chk chk-pass">D</span> <strong>Date</strong> — Invoice date parsed correctly (not defaulting to today)</div>
+      <div><span class="chk chk-pass">P</span> <strong>Party</strong> — Guest/party name is not blank</div>
+      <div><span class="chk chk-pass">T</span> <strong>Tax</strong> — At least one GST entry present when tax > 0</div>
+      <div><span class="chk chk-pass">I</span> <strong>Invoice#</strong> — Invoice number present</div>
+    </div>
+  </div>`;
+
+  // Per-property summary
+  html += `<div class="audit-section">
+    <div class="audit-section-title">By Property</div>
+    <div class="prop-grid">`;
+  Object.entries(byProp).sort((a,b)=>b[1].revenue-a[1].revenue).forEach(([prop,d])=>{
+    const ok = d.pass===d.total;
+    html += `<div class="prop-card2">
+      <div class="prop-card2-name">${esc(prop)}</div>
+      <div class="prop-card2-stats">${d.total} invoices · ₹${fmt(d.revenue)}</div>
+      <div style="margin-top:4px">${ok
+        ? '<span class="badge badge-ok">✓ All pass</span>'
+        : `<span class="badge badge-fail">${d.total-d.pass} issue${d.total-d.pass>1?'s':''}</span>`}
+      </div>
+    </div>`;
+  });
+  html += '</div></div>';
+
+  // Voucher-by-voucher table
+  html += `<div class="audit-section">
+    <div class="audit-section-title">Voucher-by-voucher audit</div>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th>
+        <th>Invoice No.</th>
+        <th>Guest</th>
+        <th>Property</th>
+        <th class="right">Dr (Invoice)</th>
+        <th class="right">Cr (Taxable+GST)</th>
+        <th class="right">Diff</th>
+        <th style="text-align:center">B</th>
+        <th style="text-align:center">D</th>
+        <th style="text-align:center">P</th>
+        <th style="text-align:center">T</th>
+        <th style="text-align:center">I</th>
+        <th>Result</th>
+      </tr></thead>
+      <tbody>`;
+
+  results.forEach((x,i)=>{
+    const row = x.r;
+    const chk = (ok)=>`<span class="chk ${ok?'chk-pass':'chk-fail'}">${ok?'✓':'✗'}</span>`;
+    html += `<tr style="${x.pass?'':'background:#fff8f8'}">
+      <td style="color:var(--ink3);font-size:.7rem">${i+1}</td>
+      <td class="mono">${esc(row.invoiceNum)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${esc(row.partyName||row.guestName||'—')}</td>
+      <td>${esc(shortProp(row.property))}</td>
+      <td class="right">₹${x.dr.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="right">₹${x.cr.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="right" style="color:${x.balanceOk?'var(--green)':'var(--red)'}">
+        ${x.diff===0?'0.00':x.diff.toFixed(2)}
+      </td>
+      <td style="text-align:center">${chk(x.balanceOk)}</td>
+      <td style="text-align:center">${chk(x.dateOk)}</td>
+      <td style="text-align:center">${chk(x.partyOk)}</td>
+      <td style="text-align:center">${chk(x.taxOk)}</td>
+      <td style="text-align:center">${chk(x.invOk)}</td>
+      <td>${x.pass
+        ? '<span class="badge badge-ok">✓ Pass</span>'
+        : '<span class="badge badge-fail">✗ Fail</span>'}</td>
+    </tr>`;
+    // If fail, show detail row
+    if(!x.pass){
+      const issues=[];
+      if(!x.balanceOk) issues.push(`Balance off by ₹${x.diff.toFixed(2)} — taxable+GST columns may not add up to invoice total`);
+      if(!x.dateOk) issues.push('Invoice date could not be parsed — will default to today');
+      if(!x.partyOk) issues.push('Guest/party name is blank — ledger cannot be created');
+      if(!x.taxOk) issues.push('Tax > 0 but no GST columns found — tax will be missing from voucher');
+      if(!x.invOk) issues.push('Invoice number is blank — Tally will reject this voucher');
+      html += `<tr style="background:#fff0f0"><td colspan="13" style="padding:6px 12px 10px 28px;font-size:.74rem;color:var(--red)">
+        ⚠ ${issues.join(' · ')}
+      </td></tr>`;
+    }
+  });
+
+  html += '</tbody></table></div></div>';
+
+  // Skipped rows info
+  document.getElementById('audit-content').innerHTML = html;
+}
+
+function renderXMLPreview(){
   const el=document.getElementById('xml-preview');
-  if(el.classList.contains('show')){el.classList.remove('show');return;}
   const xml=buildTallyXML();
-  // Syntax highlight
   const highlighted = xml
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/&lt;(\/?[\w.:]+)(\s[^&]*)?&gt;/g,(m,tag,attrs)=>{
@@ -696,7 +893,6 @@ function toggleXMLPreview(){
       return `<span class="tag">&lt;${tag}${a}&gt;</span>`;
     });
   el.innerHTML = highlighted;
-  el.classList.add('show');
 }
 </script>
 </body>
