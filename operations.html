@@ -115,6 +115,7 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
 .pm-btn-row{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .pm-logo{height:28px;filter:brightness(0) invert(1) opacity(.88)}
 .pm-exit{border:none;background:none;color:rgba(255,255,255,.4);font-size:.76rem;cursor:pointer;font-family:var(--ff)}
+.pm-back{display:none;align-items:center;gap:4px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:rgba(255,255,255,.85);font-size:.72rem;font-weight:600;padding:4px 9px;border-radius:7px;cursor:pointer;font-family:var(--ff);white-space:nowrap;flex-shrink:0}
 .pm-body{flex:1;padding:16px;max-width:100%;margin:0 auto;width:100%}
 .mon-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .mon-nav button{padding:5px 12px;border:1.5px solid var(--line);border-radius:7px;background:var(--white);font-size:.8rem;font-weight:600;font-family:var(--ff)}
@@ -241,8 +242,8 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
   .stat-v{font-size:2rem}
   .stat-l{font-size:.58rem}
   .fg,.fg.t3,.fg.t4,.fg.t5{grid-template-columns:1fr}
-  /* Table: horizontal-only scroll — touch-action:pan-x stops diagonal drift */
-  .xl-wrap{max-width:calc(100vw - 20px);overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;touch-action:pan-x;max-height:none}
+  /* Table: both-direction native touch scroll */
+  .xl-wrap{max-width:calc(100vw - 20px);overflow:auto;-webkit-overflow-scrolling:touch;max-height:65vh;touch-action:pan-x pan-y}
   .xl-tbl{font-size:.7rem}
   .xl-tbl .item-col{min-width:80px;max-width:95px;width:80px;padding:4px 6px;font-size:.66rem}
   .xl-tbl .item-col-head{min-width:80px;max-width:95px;padding:4px 6px}
@@ -271,10 +272,12 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
   /* show topbar back button on mobile */
   .mob-back{display:flex}
   /* PM header: stack info row + scrollable buttons row */
-  .pm-header{flex-direction:column;align-items:stretch;padding:10px 12px;gap:7px}
-  .pm-btn-row{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .pm-header{flex-direction:column;align-items:stretch;padding:8px 12px;gap:6px}
+  .pm-btn-row{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;gap:4px}
   .pm-btn-row::-webkit-scrollbar{display:none}
-  .pm-btn-row button{white-space:nowrap;flex-shrink:0}
+  .pm-btn-row button{white-space:nowrap;flex-shrink:0;padding:5px 9px!important;font-size:.7rem!important}
+  .pm-back{display:flex}
+  .pm-body{padding:10px 10px 20px}
 
   /* ── Purchases/Expenses: compact card rows on mobile ── */
   .ltbl{width:100%;border-collapse:collapse}
@@ -600,10 +603,11 @@ function useDragScroll(){
   useEffect(()=>{
     const el=ref.current;if(!el)return;
     let active=false,sx=0,sy=0,sl=0,st=0;
+    const SKIP='input,button,label,select,textarea,a,[draggable="true"]';
+    // ── Mouse drag-scroll (desktop) ──
     function onDown(e){
       if(e.button!==0)return;
-      // Don't hijack clicks on interactive elements or drag handles
-      if(e.target.closest('input,button,label,select,textarea,a,[draggable="true"]'))return;
+      if(e.target.closest(SKIP))return;
       active=true;sx=e.pageX;sy=e.pageY;sl=el.scrollLeft;st=el.scrollTop;
       el.style.cursor='grabbing';el.style.userSelect='none';
     }
@@ -616,13 +620,34 @@ function useDragScroll(){
       if(!active)return;
       active=false;el.style.cursor='';el.style.userSelect='';
     }
+    // ── Touch drag-scroll (mobile) ──
+    function onTouchStart(e){
+      if(e.touches.length!==1)return;
+      if(e.target.closest(SKIP))return;
+      const t=e.touches[0];
+      active=true;sx=t.pageX;sy=t.pageY;sl=el.scrollLeft;st=el.scrollTop;
+    }
+    function onTouchMove(e){
+      if(!active||e.touches.length!==1)return;
+      const t=e.touches[0];
+      el.scrollLeft=sl-(t.pageX-sx);
+      el.scrollTop=st-(t.pageY-sy);
+      e.preventDefault();
+    }
+    function onTouchEnd(){active=false;}
     el.addEventListener('mousedown',onDown);
     window.addEventListener('mousemove',onMove);
     window.addEventListener('mouseup',onUp);
+    el.addEventListener('touchstart',onTouchStart,{passive:true});
+    el.addEventListener('touchmove',onTouchMove,{passive:false});
+    el.addEventListener('touchend',onTouchEnd);
     return()=>{
       el.removeEventListener('mousedown',onDown);
       window.removeEventListener('mousemove',onMove);
       window.removeEventListener('mouseup',onUp);
+      el.removeEventListener('touchstart',onTouchStart);
+      el.removeEventListener('touchmove',onTouchMove);
+      el.removeEventListener('touchend',onTouchEnd);
     };
   },[]);
   return ref;
@@ -1257,19 +1282,20 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
       {showReqForm&&<PMRequestForm session={session} onClose={()=>setShowReqForm(false)} onSubmit={req=>setRequests(prev=>[req,...(prev||[])])}/>}
       {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} requests={requests} setRequests={setRequests} proc={proc} setProc={setProc} received={received} setReceived={setReceived} onClose={()=>setShowInvForm(false)}/>}
       <div className="pm-header">
-        <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
-          <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+          <button className="pm-back" onClick={onLogout}>← Back</button>
+          <svg height="20" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
             <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
           </svg>
-          <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.propName} · {session.submitter}</div>
-          {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,.55)",whiteSpace:"nowrap",flexShrink:0}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
+          <div style={{color:"rgba(255,255,255,.7)",fontSize:".8rem",flex:1,marginLeft:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.propName} · {session.submitter}</div>
+          {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,.5)",whiteSpace:"nowrap",flexShrink:0}}><span style={{width:"5px",height:"5px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
+          <button className="pm-exit" style={{marginLeft:4}} onClick={onLogout}>✕ Exit</button>
         </div>
         <div className="pm-btn-row">
-          <button style={{padding:"6px 11px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E"}} onClick={()=>setShowInvForm(true)}>📦 Log Received</button>
+          <button style={{padding:"6px 11px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E"}} onClick={()=>setShowInvForm(true)}>📦 Inventory Received</button>
           <button style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid "+(showReceivedLog?"#1B7A5E":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:showReceivedLog?"#1B7A5E":"transparent"}} onClick={()=>setShowReceivedLog(s=>!s)}>📋 Received Log</button>
           <button onClick={()=>setEditItems(m=>!m)} style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid "+(editItems?"#0F5C4C":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:editItems?"#0F5C4C":"transparent"}}>{editItems?"✓ Done":"✏️ Edit Items"}</button>
           <button className="btn-req" style={{padding:"6px 11px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
-          <button className="pm-exit" style={{marginLeft:4,padding:"6px 10px",border:"1.5px solid rgba(255,255,255,.2)",borderRadius:7}} onClick={onLogout}>✕</button>
         </div>
       </div>
       <div className="pm-body">
