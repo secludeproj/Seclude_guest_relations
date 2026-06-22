@@ -350,7 +350,7 @@ function handleFile(file){
     try{
       const wb = XLSX.read(e.target.result,{type:'array',cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws,{raw:false,defval:null});
+      const raw = XLSX.utils.sheet_to_json(ws,{raw:false,defval:null,dateNF:'yyyy-mm-dd'});
       parsedRows = raw.map(normalizeRow).filter(r=>r!==null);
       document.getElementById('drop-text').textContent = '✓ ' + file.name;
       dz.classList.add('has-file');
