@@ -177,7 +177,7 @@ tr:hover td{background:#f7fbf9}
 
     <div class="notice notice-info">
       <svg class="notice-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <div>These names must <strong>exactly match</strong> the ledger names in your Tally company. Settings are saved in your browser. Configure once, reuse forever.</div>
+      <div><strong>No strict matching required.</strong> All ledgers (revenue, tax, guests) are auto-created in Tally if they don't exist yet — using whatever names you set here. If a ledger already exists with the same name, Tally skips creation and reuses it. Settings are saved in your browser.</div>
     </div>
 
     <div class="settings-panel" id="settings-panel">
@@ -441,7 +441,7 @@ function normalizeRow(row){
 
   return {
     invoiceDate:    pick(row,COL.invoiceDate),
-    invoiceNum,
+    invoiceNum:     invNum,
     folioNum:       pick(row,COL.folioNum)||'',
     property:       pick(row,COL.property)||'',
     outletName:     pick(row,COL.outletName)||'',
@@ -558,6 +558,16 @@ function esc(s){
 // ─── XML generation ───────────────────────────────────────────────────────────
 function round2(n){ return Math.round(n*100)/100; }
 
+function mkLedger(lines, name, parent, extraTags=''){
+  lines.push('        <TALLYMESSAGE xmlns:UDF="TallyUDF">');
+  lines.push(`          <LEDGER NAME="${esc(name)}" ACTION="Create">`);
+  lines.push(`            <NAME>${esc(name)}</NAME>`);
+  lines.push(`            <PARENT>${esc(parent)}</PARENT>`);
+  if(extraTags) lines.push(extraTags);
+  lines.push('          </LEDGER>');
+  lines.push('        </TALLYMESSAGE>');
+}
+
 function buildTallyXML(){
   const s=getSettings();
   const lines=[];
@@ -575,13 +585,22 @@ function buildTallyXML(){
   lines.push('      </REQUESTDESC>');
   lines.push('      <REQUESTDATA>');
 
-  // Collect unique guests for ledger creation
+  // ── Pre-create all revenue + tax ledgers once (Tally skips silently if already exists) ──
+  mkLedger(lines, s['s-room'],   'Sales Accounts');
+  mkLedger(lines, s['s-fb'],     'Sales Accounts');
+  mkLedger(lines, s['s-addon'],  'Sales Accounts');
+  mkLedger(lines, s['s-cgst9'],  'Duties & Taxes');
+  mkLedger(lines, s['s-sgst9'],  'Duties & Taxes');
+  mkLedger(lines, s['s-cgst25'], 'Duties & Taxes');
+  mkLedger(lines, s['s-sgst25'], 'Duties & Taxes');
+
+  // ── Guest ledgers + vouchers ──
   const guestsAdded = new Set();
 
   parsedRows.forEach(r=>{
     const type=classifyType(r);
     const revLedger = type==='room' ? s['s-room'] : type==='fb' ? s['s-fb'] : s['s-addon'];
-    const partyName = r.partyName || r.guestName || 'Unknown Guest';
+    const partyName = (r.partyName||r.guestName||'Unknown Guest').trim();
     const dateStr   = fmtTallyDate(r.invoiceDate) || fmtTallyDate(new Date());
     const narration = [
       r.property?'Property: '+shortProp(r.property):'',
@@ -592,16 +611,11 @@ function buildTallyXML(){
       r.mealPlan?'Meal: '+r.mealPlan:'',
     ].filter(Boolean).join(' | ');
 
-    // Auto-create guest ledger (Tally silently skips if already exists)
+    // Auto-create guest ledger
     if(!guestsAdded.has(partyName)){
       guestsAdded.add(partyName);
-      lines.push('        <TALLYMESSAGE xmlns:UDF="TallyUDF">');
-      lines.push(`          <LEDGER NAME="${esc(partyName)}" ACTION="Create">`);
-      lines.push(`            <NAME>${esc(partyName)}</NAME>`);
-      lines.push(`            <PARENT>${esc(s['s-debtors'])}</PARENT>`);
-      if(r.partyGSTIN&&r.partyGSTIN!=='--') lines.push(`            <TAXREGISTRATIONNO>${esc(r.partyGSTIN)}</TAXREGISTRATIONNO>`);
-      lines.push('          </LEDGER>');
-      lines.push('        </TALLYMESSAGE>');
+      const gstin = r.partyGSTIN&&r.partyGSTIN!=='--' ? `            <TAXREGISTRATIONNO>${esc(r.partyGSTIN)}</TAXREGISTRATIONNO>` : '';
+      mkLedger(lines, partyName, s['s-debtors'], gstin);
     }
 
     // Sales voucher
@@ -614,27 +628,26 @@ function buildTallyXML(){
     lines.push('            <ISINVOICE>Yes</ISINVOICE>');
     if(narration) lines.push(`            <NARRATION>${esc(narration)}</NARRATION>`);
 
-    // ── Ledger entries ──
-    // 1. Party (Debtor) — always negative in Tally XML for sales
+    // 1. Party (Debtor) — negative for sales Dr
     lines.push('            <ALLLEDGERENTRIES.LIST>');
     lines.push(`              <LEDGERNAME>${esc(partyName)}</LEDGERNAME>`);
     lines.push('              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>');
     lines.push(`              <AMOUNT>${round2(-r.invoiceAmt)}</AMOUNT>`);
     lines.push('            </ALLLEDGERENTRIES.LIST>');
 
-    // 2. Revenue — taxable amount
+    // 2. Revenue
     lines.push('            <ALLLEDGERENTRIES.LIST>');
     lines.push(`              <LEDGERNAME>${esc(revLedger)}</LEDGERNAME>`);
     lines.push('              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>');
     lines.push(`              <AMOUNT>${round2(r.taxableAmt)}</AMOUNT>`);
     lines.push('            </ALLLEDGERENTRIES.LIST>');
 
-    // 3. Tax entries — include only non-zero ones
+    // 3. Tax — only include non-zero entries
     const taxMap = [
-      {key:'cgst9',  ledger:s['s-cgst9'],  amt:r.cgst9},
-      {key:'sgst9',  ledger:s['s-sgst9'],  amt:r.sgst9},
-      {key:'cgst25', ledger:s['s-cgst25'], amt:r.cgst25},
-      {key:'sgst25', ledger:s['s-sgst25'], amt:r.sgst25},
+      {ledger:s['s-cgst9'],  amt:r.cgst9},
+      {ledger:s['s-sgst9'],  amt:r.sgst9},
+      {ledger:s['s-cgst25'], amt:r.cgst25},
+      {ledger:s['s-sgst25'], amt:r.sgst25},
     ];
     taxMap.forEach(t=>{
       if(!t.amt) return;
