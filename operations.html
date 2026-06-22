@@ -111,7 +111,8 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
 .prop-tab:hover:not(.on){border-color:var(--g);color:var(--g)}
 
 #pm-wrap{min-height:100vh;background:var(--stone);display:flex;flex-direction:column}
-.pm-header{background:var(--g3);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pm-header{background:var(--g3);padding:14px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pm-btn-row{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .pm-logo{height:28px;filter:brightness(0) invert(1) opacity(.88)}
 .pm-exit{border:none;background:none;color:rgba(255,255,255,.4);font-size:.76rem;cursor:pointer;font-family:var(--ff)}
 .pm-body{flex:1;padding:16px;max-width:100%;margin:0 auto;width:100%}
@@ -269,6 +270,11 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
   .back-btn{display:none}
   /* show topbar back button on mobile */
   .mob-back{display:flex}
+  /* PM header: stack info row + scrollable buttons row */
+  .pm-header{flex-direction:column;align-items:stretch;padding:10px 12px;gap:7px}
+  .pm-btn-row{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .pm-btn-row::-webkit-scrollbar{display:none}
+  .pm-btn-row button{white-space:nowrap;flex-shrink:0}
 
   /* ── Purchases/Expenses: compact card rows on mobile ── */
   .ltbl{width:100%;border-collapse:collapse}
@@ -873,8 +879,8 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
       <table className="xl-tbl">
         <thead>
           {isRoom&&<tr>
-            {editItems&&<th rowSpan={2} style={{width:22,background:"#F9FAFB"}}/>}
-            <th className="item-col-head" rowSpan={2}>Item</th>
+            {editItems&&<th rowSpan={2} style={{width:22,background:"#F9FAFB",position:"sticky",left:0,zIndex:5}}/>}
+            <th className="item-col-head" rowSpan={2} style={editItems?{left:22}:{}}>Item</th>
             {rooms.map(r=><th key={r} className="room-hd" colSpan={isMobile?2:3}
               draggable={!!editItems}
               onDragStart={editItems?e=>handleRoomDragStart(e,r):undefined}
@@ -893,8 +899,8 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
             </React.Fragment>)}
           </tr>}
           {!isRoom&&<tr>
-            {editItems&&<th style={{width:22,background:"#F9FAFB"}}/>}
-            <th className="item-col-head">Item</th>
+            {editItems&&<th style={{width:22,background:"#F9FAFB",position:"sticky",left:0,zIndex:5}}/>}
+            <th className="item-col-head" style={editItems?{left:22}:{}}>Item</th>
             <th className="prop-hd" style={{minWidth:62}}>Condition</th>
             <th className="prop-hd" style={{minWidth:40}}>Quantity</th>
             <th className="prop-hd" style={{minWidth:36}}>Photo</th>
@@ -907,7 +913,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
               // Main room items
               ...items.map(item=><tr key={item} {...rowDragProps(item,null)}>
                 {editItems&&<DragHandle item={item} group={null}/>}
-                <td className="item-col">{item}</td>
+                <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                 {rooms.map(room=>{
                   const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
                   return<React.Fragment key={room}>
@@ -934,8 +940,8 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                 const colCount=rooms.length*(isMobile?2:3);
                 return[
                   <tr key={"ss-hd-"+ss.label}>
-                    {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
-                    <td className="item-col" style={{background:"#E8F3F0",color:"var(--g)",fontWeight:700,fontSize:".7rem",letterSpacing:".07em",textTransform:"uppercase",padding:"6px 12px",borderTop:"2px solid var(--gl)"}}>
+                    {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)",position:"sticky",left:0}}/>}
+                    <td className="item-col" style={{background:"#E8F3F0",color:"var(--g)",fontWeight:700,fontSize:".7rem",letterSpacing:".07em",textTransform:"uppercase",padding:"6px 12px",borderTop:"2px solid var(--gl)",...(editItems?{left:22}:{})}}>
                       {ss.label}
                     </td>
                     {rooms.map(r=><React.Fragment key={r}>
@@ -947,7 +953,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                   </tr>,
                   ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item} {...rowDragProps(item,ssKey)}>
                     {editItems&&<DragHandle item={item} group={ssKey}/>}
-                    <td className="item-col" style={{paddingLeft:22}}>{item}</td>
+                    <td className="item-col" style={{paddingLeft:22,...(editItems?{left:22}:{})}}>{item}</td>
                     {rooms.map(room=>{
                       const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
                       return<React.Fragment key={room}>
@@ -969,8 +975,8 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
             :subcats
               ?Object.entries(subcats).flatMap(([sub,sitems])=>[
                 <tr key={"sub-"+sub} className="subcat-row">
-                  {editItems&&<td style={{background:"#F8F4EF"}}/>}
-                  <td className="item-col" style={{color:"#0F5C4C",fontWeight:700}}>{sub}</td>
+                  {editItems&&<td style={{background:"#F8F4EF",position:"sticky",left:0}}/>}
+                  <td className="item-col" style={{color:"#0F5C4C",fontWeight:700,...(editItems?{left:22}:{})}}>{sub}</td>
                   <td style={{background:"#F8F4EF"}}/><td style={{background:"#F8F4EF"}}/><td style={{background:"#F8F4EF"}}/>
                   {editItems&&<td style={{background:"#F8F4EF"}}/>}
                 </tr>,
@@ -978,7 +984,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                   const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
                   return<tr key={item} {...rowDragProps(item,sub)}>
                     {editItems&&<DragHandle item={item} group={sub}/>}
-                    <td className="item-col">{item}</td>
+                    <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                     <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                       <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
                     </td>
@@ -995,7 +1001,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                 const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
                 return<tr key={item} {...rowDragProps(item,null)}>
                   {editItems&&<DragHandle item={item} group={null}/>}
-                  <td className="item-col">{item}</td>
+                  <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                   <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                     <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
                   </td>
@@ -1235,16 +1241,20 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
       {showReqForm&&<PMRequestForm session={session} onClose={()=>setShowReqForm(false)} onSubmit={req=>setRequests(prev=>[req,...(prev||[])])}/>}
       {showInvForm&&<InvReceivedModal session={session} checks={checks} setChecks={setChecks} customItems={customItems} setCustomItems={setCustomItems} requests={requests} setRequests={setRequests} proc={proc} setProc={setProc} received={received} setReceived={setReceived} onClose={()=>setShowInvForm(false)}/>}
       <div className="pm-header">
-        <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
-          <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
-        </svg>
-        <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:10}}>{session.propName} · {session.submitter}</div>
-        {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,.55)",whiteSpace:"nowrap",marginRight:4}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
-        <button className="btn-g" style={{padding:"6px 12px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E",marginRight:4}} onClick={()=>setShowInvForm(true)}>📦 Log Received</button>
-        <button style={{padding:"6px 12px",fontSize:".74rem",border:"1.5px solid "+(showReceivedLog?"#1B7A5E":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:showReceivedLog?"#1B7A5E":"transparent",marginRight:4}} onClick={()=>setShowReceivedLog(s=>!s)}>📋 Received Log</button>
-        <button onClick={()=>setEditItems(m=>!m)} style={{padding:"6px 12px",fontSize:".74rem",border:"1.5px solid "+(editItems?"#0F5C4C":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:editItems?"#0F5C4C":"transparent",marginRight:4}}>{editItems?"✓ Done":"✏️ Edit Items"}</button>
-        <button className="btn-req" style={{padding:"6px 12px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
-        <button className="pm-exit" style={{marginLeft:8}} onClick={onLogout}>Exit ✕</button>
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
+          <svg height="22" viewBox="0 0 120 22" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+            <text y="17" fontFamily="Georgia,serif" fontSize="16" fill="rgba(255,255,255,.88)" letterSpacing="3">SECLUDE</text>
+          </svg>
+          <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.propName} · {session.submitter}</div>
+          {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,.55)",whiteSpace:"nowrap",flexShrink:0}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
+        </div>
+        <div className="pm-btn-row">
+          <button style={{padding:"6px 11px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E"}} onClick={()=>setShowInvForm(true)}>📦 Log Received</button>
+          <button style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid "+(showReceivedLog?"#1B7A5E":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:showReceivedLog?"#1B7A5E":"transparent"}} onClick={()=>setShowReceivedLog(s=>!s)}>📋 Received Log</button>
+          <button onClick={()=>setEditItems(m=>!m)} style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid "+(editItems?"#0F5C4C":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:editItems?"#0F5C4C":"transparent"}}>{editItems?"✓ Done":"✏️ Edit Items"}</button>
+          <button className="btn-req" style={{padding:"6px 11px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
+          <button className="pm-exit" style={{marginLeft:4,padding:"6px 10px",border:"1.5px solid rgba(255,255,255,.2)",borderRadius:7}} onClick={onLogout}>✕</button>
+        </div>
       </div>
       <div className="pm-body">
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:12}}>
@@ -1318,15 +1328,17 @@ function ReceivedLog({received,showProp=true}){
             <tbody>
               {list.map((r,i)=>(
                 <tr key={r.id} style={{borderBottom:"1px solid var(--line)",background:i%2===0?"var(--white)":"var(--stone)"}}>
-                  <td style={{padding:"8px 12px",whiteSpace:"nowrap",fontFamily:"var(--fm)",color:"var(--ink3)"}}>{fmtD(r.date)}</td>
-                  {showProp&&<td style={{padding:"8px 12px",fontWeight:600}}>{r.propName}</td>}
-                  <td style={{padding:"8px 12px",fontWeight:600}}>{r.item}</td>
-                  <td style={{padding:"8px 12px",color:"var(--ink2)"}}>{r.area}</td>
-                  <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"var(--fm)"}}>{r.qty}</td>
-                  <td style={{padding:"8px 12px",color:"var(--ink3)"}}>{r.vendor||"—"}</td>
-                  <td style={{padding:"8px 12px",textAlign:"right",fontFamily:"var(--fm)"}}>{r.price!=null?`₹${Number(r.price).toLocaleString("en-IN")}`:"—"}</td>
-                  <td style={{padding:"8px 12px",color:"var(--ink3)"}}>{r.receivedBy}</td>
-                  <td style={{padding:"8px 12px",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{r.invoiceNo||"—"}</td>
+                  <td data-label="Date" style={{padding:"8px 12px",whiteSpace:"nowrap"}}>
+                    <span style={{display:"inline-block",background:"#EDE9FE",color:"#6D28D9",fontFamily:"var(--fm)",fontSize:".72rem",fontWeight:700,padding:"2px 7px",borderRadius:5}}>{fmtD(r.date)}</span>
+                  </td>
+                  {showProp&&<td data-label="Property" style={{padding:"8px 12px",fontWeight:600}}>{r.propName}</td>}
+                  <td data-label="Item" style={{padding:"8px 12px",fontWeight:600}}>{r.item}</td>
+                  <td data-label="Area" style={{padding:"8px 12px",color:"var(--ink2)"}}>{r.area}</td>
+                  <td data-label="Qty" style={{padding:"8px 12px",textAlign:"right",fontFamily:"var(--fm)"}}>{r.qty}</td>
+                  <td data-label="Vendor" style={{padding:"8px 12px",color:"var(--ink3)"}}>{r.vendor||"—"}</td>
+                  <td data-label="Price" style={{padding:"8px 12px",textAlign:"right",fontFamily:"var(--fm)"}}>{r.price!=null?`₹${Number(r.price).toLocaleString("en-IN")}`:"—"}</td>
+                  <td data-label="Received By" style={{padding:"8px 12px",color:"var(--ink3)"}}>{r.receivedBy}</td>
+                  <td data-label="Invoice" style={{padding:"8px 12px",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{r.invoiceNo||"—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -1343,7 +1355,13 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
   const[exp,setExp]=useFirestore("seclude_exp",INIT_EXP,500);
-  useEffect(()=>{if(localStorage.getItem("seclude_cleared_exp_v1"))return;setExp([]);localStorage.setItem("seclude_cleared_exp_v1","1");},[]);
+  useEffect(()=>{
+    if(localStorage.getItem("seclude_cleared_exp_v2"))return;
+    localStorage.setItem("seclude_cleared_exp_v2","1");
+    try{localStorage.setItem("seclude_exp",JSON.stringify([]));}catch{}
+    if(window.db)window.db.collection("ops").doc("seclude_exp").set({v:[],_ts:Date.now()}).catch(()=>{});
+    setExp([]);
+  },[]);
   const[sideOpen,setSideOpen]=useState(false);
   const today=todayYMD();
   const[yr,setYr]=useState(today.y);
@@ -2253,9 +2271,11 @@ function App(){
   },[session]);
   // One-time clear of sample purchases data
   useEffect(()=>{
-    if(localStorage.getItem("seclude_cleared_proc_v1"))return;
+    if(localStorage.getItem("seclude_cleared_proc_v2"))return;
+    localStorage.setItem("seclude_cleared_proc_v2","1");
+    try{localStorage.setItem("seclude_proc_v2",JSON.stringify([]));}catch{}
+    if(window.db)window.db.collection("ops").doc("seclude_proc_v2").set({v:[],_ts:Date.now()}).catch(()=>{});
     setProc([]);
-    localStorage.setItem("seclude_cleared_proc_v1","1");
   },[]);
   useEffect(()=>{
     if(localStorage.getItem("seclude_seeded_v4"))return;
