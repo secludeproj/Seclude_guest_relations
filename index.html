@@ -1843,100 +1843,137 @@ function gmailAfterDate(lastSyncIso){
   return`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// Djubo-owned fields — always overwrite from email; manual fields (callLog, upsellStatus, etc.) are preserved
+const DJUBO_FIELDS=['guestName','guestEmail','guestPhone','checkIn','checkOut','property','rooms',
+  'financials','reservationType','checkInTime','checkOutTime','cancellationPolicy'];
+
+// Fetch one confirmation message and return {parsed, subject}
+async function fetchConfirmationMsg(token, msgId){
+  const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`);
+  const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
+  let {text:body,rfc822Ids}=extractPlainText(full.payload);
+  // Forwarded emails: Djubo email stored as message/rfc822 attachment
+  for(const attId of rfc822Ids){
+    try{
+      const att=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}/attachments/${attId}`);
+      if(att.data){
+        const raw=decodeGmailBody(att.data);
+        const htmlBlock=raw.match(/Content-Type:\s*text\/html[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
+        if(htmlBlock){try{const d=decodeGmailBody(htmlBlock.replace(/\s/g,''));if(d.length>50)body+='\n'+htmlToText(d);}catch{}}
+        const txtBlock=raw.match(/Content-Type:\s*text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
+        if(txtBlock){try{const isB64=/^[A-Za-z0-9+/\r\n]+=*\s*$/.test(txtBlock.trim());const d=isB64?decodeGmailBody(txtBlock.replace(/\s/g,'')):txtBlock;if(d.length>50)body+='\n'+d;}catch{}}
+        if(!htmlBlock&&!txtBlock)body+='\n'+raw.replace(/<[^>]+>/g,' ').replace(/\s{3,}/g,'\n');
+      }
+    }catch(e){console.warn('[GmailSync] attachment fetch failed',attId,e);}
+  }
+  return{parsed:parseDjuboBooking(body,msgId,subject),subject};
+}
+
 async function syncGmailBookings(token, existingBookings, setBookings, setSyncLog, setLastSync, lastSync){
-  const added=[], cancelled=[], skipped=[];
-  const existingIds=new Set(existingBookings.map(b=>b.reservationId));
+  const added=[], updated=[], cancelled=[], skipped=[];
   const processedIds=loadProcessedIds();
   const newlyProcessed=new Set();
-
   const afterDate=gmailAfterDate(lastSync);
+  const BATCH=10; // parallel fetches at a time
 
-  // 1. New bookings — search by subject, narrowed to since-last-sync date
+  // Build a live map of existing bookings for fast lookup + in-place updates
+  const existingMap=new Map(existingBookings.map(b=>[b.reservationId,b]));
+
+  // 1. Confirmation emails
   const q=encodeURIComponent(`subject:"Reservation Confirmation" after:${afterDate}`);
   console.log('[GmailSync] query:',decodeURIComponent(q));
   const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=200`);
-  const msgs=list.messages||[];
-  console.log('[GmailSync] messages found:',msgs.length);
+  const allMsgs=list.messages||[];
+  console.log('[GmailSync] total confirmation msgs:',allMsgs.length);
 
+  // Filter to only unprocessed messages; early-stop after 3 consecutive known
+  const toFetch=[];
   let consecutiveKnown=0;
-  for(const msg of msgs){
-    // Skip messages we've already processed — Gmail returns newest first, so stop after 3 consecutive known
+  for(const msg of allMsgs){
     if(processedIds.has(msg.id)){
-      consecutiveKnown++;
-      if(consecutiveKnown>=3){console.log('[GmailSync] 3 consecutive known msgs — stopping early');break;}
+      if(++consecutiveKnown>=3){console.log('[GmailSync] 3 consecutive known — stopping early');break;}
       continue;
     }
     consecutiveKnown=0;
-    newlyProcessed.add(msg.id);
+    toFetch.push(msg);
+  }
+  console.log('[GmailSync] new msgs to fetch:',toFetch.length);
 
-    const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
-    const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
-    let {text:body, rfc822Ids}=extractPlainText(full.payload);
-    // Forwarded emails: original Djubo email stored as message/rfc822 attachment — fetch it
-    for(const attId of rfc822Ids){
-      try{
-        const att=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}/attachments/${attId}`);
-        if(att.data){
-          const raw=decodeGmailBody(att.data);
-          // Try base64-encoded HTML block first
-          const htmlBlock=raw.match(/Content-Type:\s*text\/html[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
-          if(htmlBlock){
-            try{const decoded=decodeGmailBody(htmlBlock.replace(/\s/g,''));if(decoded.length>50){body+='\n'+htmlToText(decoded);}}
-            catch{}
-          }
-          // Try plain text block
-          const txtBlock=raw.match(/Content-Type:\s*text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?=\r?\n--|\r?\n\r?\nContent-|$)/i)?.[1];
-          if(txtBlock){
-            try{
-              const isB64=/^[A-Za-z0-9+/\r\n]+=*\s*$/.test(txtBlock.trim());
-              const decoded=isB64?decodeGmailBody(txtBlock.replace(/\s/g,'')):txtBlock;
-              if(decoded.length>50)body+='\n'+decoded;
-            }catch{}
-          }
-          // Last resort: strip tags from raw
-          if(!htmlBlock&&!txtBlock)body+='\n'+raw.replace(/<[^>]+>/g,' ').replace(/\s{3,}/g,'\n');
+  // Fetch in parallel batches of 10
+  for(let i=0;i<toFetch.length;i+=BATCH){
+    const chunk=toFetch.slice(i,i+BATCH);
+    const results=await Promise.all(chunk.map(async m=>{
+      newlyProcessed.add(m.id);
+      try{return await fetchConfirmationMsg(token,m.id);}
+      catch(e){console.warn('[GmailSync] fetch error',m.id,e);return null;}
+    }));
+
+    for(const r of results){
+      if(!r)continue;
+      const{parsed,subject}=r;
+      if(!parsed){skipped.push(subject);continue;}
+
+      const existing=existingMap.get(parsed.reservationId);
+      if(!existing){
+        // Completely new reservation
+        added.push(parsed);
+        existingMap.set(parsed.reservationId,parsed);
+        console.log('[GmailSync] ✅ new:',parsed.reservationId,parsed.guestName,parsed.property);
+      } else {
+        // Existing reservation — check if any Djubo-owned fields changed
+        const changed=DJUBO_FIELDS.some(f=>JSON.stringify(existing[f])!==JSON.stringify(parsed[f]));
+        if(changed){
+          // Merge: overwrite Djubo fields, preserve manual fields (callLog, upsellStatus, status, notes…)
+          const merged={
+            ...existing,
+            ...Object.fromEntries(DJUBO_FIELDS.map(f=>[f,parsed[f]!==undefined?parsed[f]:existing[f]])),
+          };
+          updated.push(merged);
+          existingMap.set(parsed.reservationId,merged);
+          console.log('[GmailSync] 🔄 modified:',parsed.reservationId,parsed.guestName);
+        } else {
+          skipped.push(parsed.reservationId);
         }
-      }catch(e){console.warn('[GmailSync] attachment fetch failed',attId,e);}
+      }
     }
-    console.log('[GmailSync] subject:',subject,'bodyLen:',body.length,'rfc822s:',rfc822Ids.length);
-    const parsed=parseDjuboBooking(body, msg.id, subject);
-    if(!parsed){skipped.push(subject||msg.id);continue;}
-    // Update existing booking if it has no dates (was stored incomplete from a previous sync)
-    const existing=existingBookings.find(b=>b.reservationId===parsed.reservationId);
-    if(existing&&existing.checkIn){skipped.push(parsed.reservationId);continue;}
-    if(existing&&!existing.checkIn){
-      added.push({...existing,...parsed});
-      console.log('[GmailSync] 🔄 updated incomplete:',parsed.reservationId);
-    }else{
-      added.push(parsed);
-      console.log('[GmailSync] ✅ parsed:',parsed.reservationId,parsed.guestName,parsed.property);
-    }
-    existingIds.add(parsed.reservationId);
   }
 
-  // 2. Cancellations — narrowed to since-last-sync date
+  // 2. Cancellation emails — also batched
   const qc=encodeURIComponent(`subject:"Reservation Cancellation" after:${afterDate}`);
   const listC=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${qc}&maxResults=100`);
-  for(const msg of (listC.messages||[])){
-    if(processedIds.has(msg.id))continue;
-    newlyProcessed.add(msg.id);
-    const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
-    const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
-    const {text:body}=extractPlainText(full.payload);
-    const resId=parseDjuboCancellation(body,subject);
-    if(resId)cancelled.push(resId);
+  const cancelMsgs=(listC.messages||[]).filter(m=>!processedIds.has(m.id));
+  for(let i=0;i<cancelMsgs.length;i+=BATCH){
+    const chunk=cancelMsgs.slice(i,i+BATCH);
+    const results=await Promise.all(chunk.map(async m=>{
+      newlyProcessed.add(m.id);
+      try{
+        const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`);
+        const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
+        const{text:body}=extractPlainText(full.payload);
+        return parseDjuboCancellation(body,subject);
+      }catch{return null;}
+    }));
+    results.forEach(r=>{if(r)cancelled.push(r);});
   }
 
-  // Persist newly processed message IDs
+  // Persist all newly seen message IDs
   newlyProcessed.forEach(id=>processedIds.add(id));
   saveProcessedIds(processedIds);
 
-  // Apply all changes atomically — drop sample placeholder data on first real import
-  if(added.length||cancelled.length){
+  // Apply all changes atomically — remove sample data on first real import
+  if(added.length||updated.length||cancelled.length){
     setBookings(prev=>{
-      const base=added.length?prev.filter(b=>!b._sample):prev;
-      const updatedIds=new Set(added.filter(a=>base.some(b=>b.reservationId===a.reservationId)).map(a=>a.reservationId));
-      let next=[...base.filter(b=>!updatedIds.has(b.reservationId)),...added];
+      // Drop _sample entries only on first real import (when we have new bookings)
+      let next=added.length?prev.filter(b=>!b._sample):[...prev];
+      // Apply updates to existing records (preserve order, swap in merged data)
+      if(updated.length){
+        const updMap=new Map(updated.map(u=>[u.reservationId,u]));
+        next=next.map(b=>updMap.has(b.reservationId)?updMap.get(b.reservationId):b);
+      }
+      // Append genuinely new bookings
+      const existingResIds=new Set(next.map(b=>b.reservationId));
+      added.forEach(a=>{if(!existingResIds.has(a.reservationId))next.push(a);});
+      // Mark cancellations
       if(cancelled.length)next=next.map(b=>cancelled.includes(b.reservationId)?{...b,status:'Cancelled'}:b);
       return next;
     });
@@ -1944,8 +1981,8 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
 
   const ts=new Date().toISOString();
   setLastSync(ts);
-  setSyncLog(prev=>[{ts,added:added.length,cancelled:cancelled.length,skipped:skipped.length},...(prev||[]).slice(0,19)]);
-  return{added:added.length,cancelled:cancelled.length};
+  setSyncLog(prev=>[{ts,added:added.length,updated:updated.length,cancelled:cancelled.length,skipped:skipped.length},...(prev||[]).slice(0,19)]);
+  return{added:added.length,updated:updated.length,cancelled:cancelled.length};
 }
 
 /* ══ GMAIL SYNC PANEL ══════════════════════════════════════════ */
@@ -2050,7 +2087,7 @@ function GmailSyncPanel({bookings,setBookings,isVisible}){
         <span style={{fontSize:"1rem"}}>📧</span>
         <div>
           <div style={{fontSize:".76rem",fontWeight:600,color:"var(--ink)"}}>Gmail Sync {hasToken?<span style={{color:"var(--g)",fontWeight:700}}>● Connected</span>:<span style={{color:"var(--ink3)"}}>○ Not connected</span>}</div>
-          <div style={{fontSize:".65rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{lastSyncFmt?`Last sync: ${lastSyncFmt}`:'Never synced'}{lastResult&&status==='done'?` · ✅ ${lastResult.added} new, ${lastResult.cancelled} cancelled`:''}</div>
+          <div style={{fontSize:".65rem",color:"var(--ink3)",fontFamily:"var(--fm)"}}>{lastSyncFmt?`Last sync: ${lastSyncFmt}`:'Never synced'}{lastResult&&status==='done'?` · ✅ ${lastResult.added} new${lastResult.updated?`, ${lastResult.updated} updated`:''}${lastResult.cancelled?`, ${lastResult.cancelled} cancelled`:''}`:''}</div>
         </div>
       </div>
       <button onClick={handleSync} disabled={status==='syncing'||status==='connecting'}
