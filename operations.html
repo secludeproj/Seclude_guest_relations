@@ -741,14 +741,8 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
     setDragItem(null);setDragOverItem(null);setDragItemGroup(null);
   }
   function handleItemDragEnd(){setDragItem(null);setDragOverItem(null);setDragItemGroup(null);}
-  // Shared drag handle td (only rendered in edit mode)
+  // Drag handle style — inlined directly (NOT a sub-component, to avoid remount-on-rerender breaking active drags)
   const HDLSTYLE={width:22,padding:"0 4px",textAlign:"center",cursor:"grab",color:"#9CA3AF",fontSize:15,userSelect:"none",verticalAlign:"middle"};
-  function DragHandle({item,group}){
-    return<td style={HDLSTYLE} draggable={true}
-      onDragStart={e=>handleItemDragStart(e,item,group)}
-      onDragEnd={handleItemDragEnd}
-      title="Drag to reorder">⠿</td>;
-  }
   function rowDragProps(item,group){
     return{
       onDragEnter:e=>handleItemDragEnter(e,item,group),
@@ -912,7 +906,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
             ?[
               // Main room items
               ...items.map(item=><tr key={item} {...rowDragProps(item,null)}>
-                {editItems&&<DragHandle item={item} group={null}/>}
+                {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,null)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
                 <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                 {rooms.map(room=>{
                   const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -952,7 +946,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
                   </tr>,
                   ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item} {...rowDragProps(item,ssKey)}>
-                    {editItems&&<DragHandle item={item} group={ssKey}/>}
+                    {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,ssKey)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
                     <td className="item-col" style={{paddingLeft:22,...(editItems?{left:22}:{})}}>{item}</td>
                     {rooms.map(room=>{
                       const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -983,7 +977,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                 ...sitems.map(item=>{
                   const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
                   return<tr key={item} {...rowDragProps(item,sub)}>
-                    {editItems&&<DragHandle item={item} group={sub}/>}
+                    {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,sub)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
                     <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                     <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                       <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
@@ -1000,7 +994,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
               :allItems.map(item=>{
                 const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
                 return<tr key={item} {...rowDragProps(item,null)}>
-                  {editItems&&<DragHandle item={item} group={null}/>}
+                  {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,null)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
                   <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                   <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                     <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
@@ -1218,6 +1212,12 @@ function InvReceivedModal({session,checks,setChecks,customItems,setCustomItems,r
             <button type="submit" className="btn btn-g btn-sm">📦 Save Receipt</button>
           </div>
         </form>
+        {(received||[]).filter(r=>r.propId===propId).length>0&&(
+          <div style={{marginTop:20,borderTop:"1px solid var(--line)",paddingTop:16}}>
+            <div style={{fontWeight:700,fontSize:".82rem",marginBottom:10,color:"var(--ink2)"}}>📋 Previously Received at {session.propName}</div>
+            <ReceivedLog received={(received||[]).filter(r=>r.propId===propId)} showProp={false}/>
+          </div>
+        )}
       </div>
     </div>
   );
