@@ -741,14 +741,30 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
     setDragItem(null);setDragOverItem(null);setDragItemGroup(null);
   }
   function handleItemDragEnd(){setDragItem(null);setDragOverItem(null);setDragItemGroup(null);}
-  // Drag handle style — inlined directly (NOT a sub-component, to avoid remount-on-rerender breaking active drags)
+  // Drag handle style — purely visual affordance, dragging happens on the <tr>
   const HDLSTYLE={width:22,padding:"0 4px",textAlign:"center",cursor:"grab",color:"#9CA3AF",fontSize:15,userSelect:"none",verticalAlign:"middle"};
+  // rowDragProps: in edit mode the entire <tr> is draggable; dragstart is cancelled
+  // if the user clicked an interactive cell (condition/qty/photo/input/button/select).
   function rowDragProps(item,group){
-    return{
+    const style={borderTop:dragOverItem===item&&dragItem!==item?"3px solid #0F5C4C":"",transition:"border-color .08s",cursor:editItems?"grab":"default"};
+    if(!editItems)return{
       onDragEnter:e=>handleItemDragEnter(e,item,group),
       onDragOver:e=>e.preventDefault(),
       onDrop:e=>handleItemDrop(e,item,group),
-      style:{borderTop:dragOverItem===item&&dragItem!==item?"3px solid #0F5C4C":"",transition:"border-color .08s"}
+      style
+    };
+    return{
+      draggable:true,
+      onDragStart:e=>{
+        if(e.target.closest('.dmg-cell,.qty-cell,.photo-cell,input,button,label,select,a'))
+          return e.preventDefault();
+        handleItemDragStart(e,item,group);
+      },
+      onDragEnd:handleItemDragEnd,
+      onDragEnter:e=>handleItemDragEnter(e,item,group),
+      onDragOver:e=>e.preventDefault(),
+      onDrop:e=>handleItemDrop(e,item,group),
+      style
     };
   }
 
@@ -906,7 +922,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
             ?[
               // Main room items
               ...items.map(item=><tr key={item} {...rowDragProps(item,null)}>
-                {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,null)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
+                {editItems&&<td style={HDLSTYLE} title="Drag row to reorder">⠿</td>}
                 <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                 {rooms.map(room=>{
                   const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -946,7 +962,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
                   </tr>,
                   ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item} {...rowDragProps(item,ssKey)}>
-                    {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,ssKey)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
+                    {editItems&&<td style={HDLSTYLE} title="Drag row to reorder">⠿</td>}
                     <td className="item-col" style={{paddingLeft:22,...(editItems?{left:22}:{})}}>{item}</td>
                     {rooms.map(room=>{
                       const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
@@ -977,7 +993,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                 ...sitems.map(item=>{
                   const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
                   return<tr key={item} {...rowDragProps(item,sub)}>
-                    {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,sub)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
+                    {editItems&&<td style={HDLSTYLE} title="Drag row to reorder">⠿</td>}
                     <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                     <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                       <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
@@ -994,7 +1010,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
               :allItems.map(item=>{
                 const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
                 return<tr key={item} {...rowDragProps(item,null)}>
-                  {editItems&&<td style={HDLSTYLE} draggable={true} onDragStart={e=>handleItemDragStart(e,item,null)} onDragEnd={handleItemDragEnd} title="Drag to reorder">⠿</td>}
+                  {editItems&&<td style={HDLSTYLE} title="Drag row to reorder">⠿</td>}
                   <td className="item-col" style={editItems?{left:22}:{}}>{item}</td>
                   <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                     <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
