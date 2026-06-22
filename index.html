@@ -1822,16 +1822,53 @@ async function gmailFetch(token, url){
   return r.json();
 }
 
-async function syncGmailBookings(token, existingBookings, setBookings, setSyncLog, setLastSync){
+// Persistent set of Gmail message IDs we've already processed — avoids re-fetching old emails
+function loadProcessedIds(){
+  try{return new Set(JSON.parse(localStorage.getItem('seclude_gmail_processed')||'[]'));}
+  catch{return new Set();}
+}
+function saveProcessedIds(set){
+  try{
+    // Keep only the latest 2000 IDs to prevent unbounded growth
+    const arr=[...set].slice(-2000);
+    localStorage.setItem('seclude_gmail_processed',JSON.stringify(arr));
+  }catch{}
+}
+
+// Build Gmail date filter — use day BEFORE last sync (with a 1-day buffer) or fall back to 2026/06/01
+function gmailAfterDate(lastSyncIso){
+  if(!lastSyncIso)return'2026/06/01';
+  const d=new Date(lastSyncIso);
+  d.setDate(d.getDate()-1); // 1-day overlap to catch edge cases
+  return`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function syncGmailBookings(token, existingBookings, setBookings, setSyncLog, setLastSync, lastSync){
   const added=[], cancelled=[], skipped=[];
   const existingIds=new Set(existingBookings.map(b=>b.reservationId));
+  const processedIds=loadProcessedIds();
+  const newlyProcessed=new Set();
 
-  // 1. New bookings — search by subject to catch both direct AND forwarded emails
-  const q=encodeURIComponent('subject:"Reservation Confirmation" after:2026/06/16');
+  const afterDate=gmailAfterDate(lastSync);
+
+  // 1. New bookings — search by subject, narrowed to since-last-sync date
+  const q=encodeURIComponent(`subject:"Reservation Confirmation" after:${afterDate}`);
   console.log('[GmailSync] query:',decodeURIComponent(q));
-  const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=500`);
-  console.log('[GmailSync] messages found:',list.messages?.length||0);
-  for(const msg of list.messages||[]){
+  const list=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=200`);
+  const msgs=list.messages||[];
+  console.log('[GmailSync] messages found:',msgs.length);
+
+  let consecutiveKnown=0;
+  for(const msg of msgs){
+    // Skip messages we've already processed — Gmail returns newest first, so stop after 3 consecutive known
+    if(processedIds.has(msg.id)){
+      consecutiveKnown++;
+      if(consecutiveKnown>=3){console.log('[GmailSync] 3 consecutive known msgs — stopping early');break;}
+      continue;
+    }
+    consecutiveKnown=0;
+    newlyProcessed.add(msg.id);
+
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
     const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
     let {text:body, rfc822Ids}=extractPlainText(full.payload);
@@ -1868,7 +1905,6 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
     const existing=existingBookings.find(b=>b.reservationId===parsed.reservationId);
     if(existing&&existing.checkIn){skipped.push(parsed.reservationId);continue;}
     if(existing&&!existing.checkIn){
-      // Replace incomplete record
       added.push({...existing,...parsed});
       console.log('[GmailSync] 🔄 updated incomplete:',parsed.reservationId);
     }else{
@@ -1878,10 +1914,12 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
     existingIds.add(parsed.reservationId);
   }
 
-  // 2. Cancellations — also by subject to catch forwarded cancellation emails
-  const qc=encodeURIComponent('subject:"Reservation Cancellation" after:2026/06/16');
-  const listC=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${qc}&maxResults=200`);
-  for(const msg of listC.messages||[]){
+  // 2. Cancellations — narrowed to since-last-sync date
+  const qc=encodeURIComponent(`subject:"Reservation Cancellation" after:${afterDate}`);
+  const listC=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${qc}&maxResults=100`);
+  for(const msg of (listC.messages||[])){
+    if(processedIds.has(msg.id))continue;
+    newlyProcessed.add(msg.id);
     const full=await gmailFetch(token,`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`);
     const subject=full.payload?.headers?.find(h=>h.name==='Subject')?.value||'';
     const {text:body}=extractPlainText(full.payload);
@@ -1889,11 +1927,14 @@ async function syncGmailBookings(token, existingBookings, setBookings, setSyncLo
     if(resId)cancelled.push(resId);
   }
 
+  // Persist newly processed message IDs
+  newlyProcessed.forEach(id=>processedIds.add(id));
+  saveProcessedIds(processedIds);
+
   // Apply all changes atomically — drop sample placeholder data on first real import
   if(added.length||cancelled.length){
     setBookings(prev=>{
       const base=added.length?prev.filter(b=>!b._sample):prev;
-      // Replace any updated incomplete records, append new ones
       const updatedIds=new Set(added.filter(a=>base.some(b=>b.reservationId===a.reservationId)).map(a=>a.reservationId));
       let next=[...base.filter(b=>!updatedIds.has(b.reservationId)),...added];
       if(cancelled.length)next=next.map(b=>cancelled.includes(b.reservationId)?{...b,status:'Cancelled'}:b);
@@ -1920,13 +1961,15 @@ function GmailSyncPanel({bookings,setBookings,isVisible}){
   const[lastResult,setLastResult]=useState(null);
   const bookingsRef=React.useRef(bookings);
   bookingsRef.current=bookings;
+  const lastSyncRef=React.useRef(lastSync);
+  lastSyncRef.current=lastSync;
   const statusRef=React.useRef(status);
   statusRef.current=status;
 
   async function runSync(tok){
     setStatus('syncing');
     try{
-      const res=await syncGmailBookings(tok,bookingsRef.current,setBookings,setSyncLog,setLastSync);
+      const res=await syncGmailBookings(tok,bookingsRef.current,setBookings,setSyncLog,setLastSync,lastSyncRef.current);
       setLastResult(res);setStatus('done');
       setTimeout(()=>setStatus('idle'),4000);
     }catch(e){
@@ -1935,14 +1978,27 @@ function GmailSyncPanel({bookings,setBookings,isVisible}){
     }
   }
 
+  // After getting a token, silently fetch the user's email for future auto-login
+  async function storeAccountHint(tok){
+    try{
+      const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}});
+      if(r.ok){const u=await r.json();if(u.email)localStorage.setItem('seclude_gmail_hint',u.email);}
+    }catch{}
+  }
+
   function getToken(callback, silent=false){
     if(!window.google?.accounts?.oauth2){if(!silent)setStatus('error');return;}
+    const hint=localStorage.getItem('seclude_gmail_hint')||'';
     const client=google.accounts.oauth2.initTokenClient({
       client_id:GMAIL_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/gmail.readonly',
+      ...(hint?{login_hint:hint}:{}),
       callback:(r)=>{
-        if(r.access_token){_gmailToken=r.access_token;setHasToken(true);callback(r.access_token);}
-        else if(!silent){setStatus('error');}
+        if(r.access_token){
+          _gmailToken=r.access_token;setHasToken(true);
+          storeAccountHint(r.access_token); // remember this account for next time
+          callback(r.access_token);
+        }else if(!silent){setStatus('error');}
       },
       error_callback:(e)=>{if(!silent)setStatus('error');}
     });
