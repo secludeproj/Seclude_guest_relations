@@ -633,7 +633,12 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
       if(sc==="__room"||sc==="__deleted"||sc.startsWith("__"))return;
       subcats[sc]=[...new Set([...(subcats[sc]||[]),...its])];
     });
-    if(subcats)Object.keys(subcats).forEach(sc=>{subcats[sc]=subcats[sc].filter(i=>!deleted.includes(i));});
+    if(subcats)Object.keys(subcats).forEach(sc=>{
+      subcats[sc]=subcats[sc].filter(i=>!deleted.includes(i));
+      const customOrder=cPropItems["__itemOrder_subcat_"+sc]||null;
+      if(customOrder&&customOrder.length)
+        subcats[sc]=[...new Set([...customOrder,...subcats[sc]])].filter(i=>subcats[sc].includes(i));
+    });
   }
 
   // Drag-to-reorder room columns (edit mode only)
@@ -654,21 +659,30 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
   }
   function handleRoomDragEnd(){setDragRoom(null);setDragOverRoom(null);}
 
-  // Drag-to-reorder item rows (edit mode only)
-  function handleItemDragStart(e,item,group){e.stopPropagation();setDragItem(item);setDragItemGroup(group);e.dataTransfer.effectAllowed="move";}
-  function handleItemDragOver(e,item,group){e.preventDefault();e.stopPropagation();if(group===dragItemGroup)setDragOverItem(item);}
+  // Drag-to-reorder item rows — drag handle <td> only, dragEnter for reliable tracking
+  function handleItemDragStart(e,item,group){
+    setDragItem(item);setDragItemGroup(group);
+    e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",item);
+  }
+  function handleItemDragEnter(e,item,group){
+    e.preventDefault();
+    if(!dragItem||dragItem===item)return;
+    const sameGroup=(group===dragItemGroup)||(group==null&&dragItemGroup==null);
+    if(sameGroup)setDragOverItem(item);
+  }
   function handleItemDrop(e,target,group){
-    e.preventDefault();e.stopPropagation();
-    if(!dragItem||dragItem===target||group!==dragItemGroup||!setCustomItems)return;
-    // Determine source list
+    e.preventDefault();
+    if(!dragItem||dragItem===target||!setCustomItems)return;
     const isSSKey=group&&group.startsWith("__ss_");
+    const isSubcat=group&&!isSSKey;
     let srcList;
     if(isSSKey){
       const label=group.replace("__ss_","");
       const defItems=(INV[propId]?.[area]?.subSections||[]).find(s=>s.label===label)?.items||[];
-      const cKey="__itemOrder_"+label;
-      const raw=[...new Set([...(cPropItems[cKey]||defItems),...(cPropItems[group]||[])])].filter(i=>!deleted.includes(i));
+      const raw=[...new Set([...(cPropItems["__itemOrder_"+label]||defItems),...(cPropItems[group]||[])])].filter(i=>!deleted.includes(i));
       srcList=raw;
+    }else if(isSubcat){
+      srcList=[...(subcats[group]||[])];
     }else{
       srcList=[...items];
     }
@@ -679,12 +693,29 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
       const n=JSON.parse(JSON.stringify(prev||{}));
       if(!n[propId])n[propId]={};if(!n[propId][area])n[propId][area]={};
       if(isSSKey){const label=group.replace("__ss_","");n[propId][area]["__itemOrder_"+label]=ordered;}
+      else if(isSubcat){n[propId][area]["__itemOrder_subcat_"+group]=ordered;}
       else{n[propId][area]["__itemOrder"]=ordered;}
       return n;
     });
     setDragItem(null);setDragOverItem(null);setDragItemGroup(null);
   }
   function handleItemDragEnd(){setDragItem(null);setDragOverItem(null);setDragItemGroup(null);}
+  // Shared drag handle td (only rendered in edit mode)
+  const HDLSTYLE={width:22,padding:"0 4px",textAlign:"center",cursor:"grab",color:"#9CA3AF",fontSize:15,userSelect:"none",verticalAlign:"middle"};
+  function DragHandle({item,group}){
+    return<td style={HDLSTYLE} draggable={true}
+      onDragStart={e=>handleItemDragStart(e,item,group)}
+      onDragEnd={handleItemDragEnd}
+      title="Drag to reorder">⠿</td>;
+  }
+  function rowDragProps(item,group){
+    return{
+      onDragEnter:e=>handleItemDragEnter(e,item,group),
+      onDragOver:e=>e.preventDefault(),
+      onDrop:e=>handleItemDrop(e,item,group),
+      style:{borderTop:dragOverItem===item&&dragItem!==item?"3px solid #0F5C4C":"",transition:"border-color .08s"}
+    };
+  }
 
   function removeItem(item,subcat){
     if(!setCustomItems)return;
@@ -807,6 +838,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
       <table className="xl-tbl">
         <thead>
           {isRoom&&<tr>
+            {editItems&&<th rowSpan={2} style={{width:22,background:"#F9FAFB"}}/>}
             <th className="item-col-head" rowSpan={2}>Item</th>
             {rooms.map(r=><th key={r} className="room-hd" colSpan={isMobile?2:3}
               draggable={!!editItems}
@@ -826,6 +858,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
             </React.Fragment>)}
           </tr>}
           {!isRoom&&<tr>
+            {editItems&&<th style={{width:22,background:"#F9FAFB"}}/>}
             <th className="item-col-head">Item</th>
             <th className="prop-hd" style={{minWidth:62}}>Condition</th>
             <th className="prop-hd" style={{minWidth:40}}>Quantity</th>
@@ -837,15 +870,9 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
           {isRoom
             ?[
               // Main room items
-              ...items.map(item=><tr key={item}
-                draggable={!!editItems}
-                onDragStart={editItems?e=>handleItemDragStart(e,item,null):undefined}
-                onDragOver={editItems?e=>handleItemDragOver(e,item,null):undefined}
-                onDrop={editItems?e=>handleItemDrop(e,item,null):undefined}
-                onDragEnd={editItems?handleItemDragEnd:undefined}
-                style={{opacity:dragOverItem===item&&dragItemGroup===null&&dragItem!==item?.5:1,outline:dragOverItem===item&&dragItemGroup===null&&dragItem!==item?"2px dashed #0F5C4C":"none",transition:"opacity .1s"}}
-              >
-                <td className="item-col" style={{cursor:editItems?"grab":"default"}}>{editItems?<span title="Drag to reorder">⠿ {item}</span>:item}</td>
+              ...items.map(item=><tr key={item} {...rowDragProps(item,null)}>
+                {editItems&&<DragHandle item={item} group={null}/>}
+                <td className="item-col">{item}</td>
                 {rooms.map(room=>{
                   const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
                   return<React.Fragment key={room}>
@@ -860,7 +887,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                 })}
                 {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,null)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
               </tr>),
-              ...(editItems?[<AddRow key="__add_room" subcat={null} colSpan={1+rooms.length*(isMobile?2:3)+1}/>]:[]),
+              ...(editItems?[<AddRow key="__add_room" subcat={null} colSpan={2+rooms.length*(isMobile?2:3)+1}/>]:[]),
               // Sub-sections: Guest Amenities, Washroom, etc.
               ...(areaData.subSections||[]).flatMap(ss=>{
                 const ssKey="__ss_"+ss.label;
@@ -871,8 +898,8 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                   :rawSsItems;
                 const colCount=rooms.length*(isMobile?2:3);
                 return[
-                  // Sub-section header row
                   <tr key={"ss-hd-"+ss.label}>
+                    {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
                     <td className="item-col" style={{background:"#E8F3F0",color:"var(--g)",fontWeight:700,fontSize:".7rem",letterSpacing:".07em",textTransform:"uppercase",padding:"6px 12px",borderTop:"2px solid var(--gl)"}}>
                       {ss.label}
                     </td>
@@ -883,16 +910,9 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     </React.Fragment>)}
                     {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
                   </tr>,
-                  // Sub-section items
-                  ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item}
-                    draggable={!!editItems}
-                    onDragStart={editItems?e=>handleItemDragStart(e,item,ssKey):undefined}
-                    onDragOver={editItems?e=>handleItemDragOver(e,item,ssKey):undefined}
-                    onDrop={editItems?e=>handleItemDrop(e,item,ssKey):undefined}
-                    onDragEnd={editItems?handleItemDragEnd:undefined}
-                    style={{opacity:dragOverItem===item&&dragItemGroup===ssKey&&dragItem!==item?.5:1,outline:dragOverItem===item&&dragItemGroup===ssKey&&dragItem!==item?"2px dashed #0F5C4C":"none",transition:"opacity .1s"}}
-                  >
-                    <td className="item-col" style={{paddingLeft:22,cursor:editItems?"grab":"default"}}>{editItems?<span title="Drag to reorder">⠿ {item}</span>:item}</td>
+                  ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item} {...rowDragProps(item,ssKey)}>
+                    {editItems&&<DragHandle item={item} group={ssKey}/>}
+                    <td className="item-col" style={{paddingLeft:22}}>{item}</td>
                     {rooms.map(room=>{
                       const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
                       return<React.Fragment key={room}>
@@ -907,20 +927,22 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     })}
                     {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,ssKey)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
                   </tr>),
-                  ...(editItems?[<AddRow key={"__add_"+ssKey} subcat={ssKey} colSpan={1+colCount+(editItems?1:0)}/>]:[])
+                  ...(editItems?[<AddRow key={"__add_"+ssKey} subcat={ssKey} colSpan={2+colCount+1}/>]:[])
                 ];
               })
             ]
             :subcats
               ?Object.entries(subcats).flatMap(([sub,sitems])=>[
                 <tr key={"sub-"+sub} className="subcat-row">
+                  {editItems&&<td style={{background:"#F8F4EF"}}/>}
                   <td className="item-col" style={{color:"#0F5C4C",fontWeight:700}}>{sub}</td>
                   <td style={{background:"#F8F4EF"}}/><td style={{background:"#F8F4EF"}}/><td style={{background:"#F8F4EF"}}/>
                   {editItems&&<td style={{background:"#F8F4EF"}}/>}
                 </tr>,
                 ...sitems.map(item=>{
                   const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
-                  return<tr key={item}>
+                  return<tr key={item} {...rowDragProps(item,sub)}>
+                    {editItems&&<DragHandle item={item} group={sub}/>}
                     <td className="item-col">{item}</td>
                     <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                       <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
@@ -932,11 +954,12 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     {editItems&&<td style={{padding:"0 4px"}}><button onClick={()=>removeItem(item,sub)} style={{background:"none",border:"none",color:"#EF4444",cursor:"pointer",fontSize:13,lineHeight:1,padding:2}} title="Remove item">✕</button></td>}
                   </tr>;
                 }),
-                ...(editItems?[<AddRow key={"__add_"+sub} subcat={sub} colSpan={4+(editItems?1:0)}/>]:[])
+                ...(editItems?[<AddRow key={"__add_"+sub} subcat={sub} colSpan={5+(editItems?1:0)}/>]:[])
               ])
               :allItems.map(item=>{
                 const dmg=getV(item,null,"damage");const qty=getV(item,null,"qty");const dcfg=DMG[dmg]||DMG[""];
-                return<tr key={item}>
+                return<tr key={item} {...rowDragProps(item,null)}>
+                  {editItems&&<DragHandle item={item} group={null}/>}
                   <td className="item-col">{item}</td>
                   <td className="dmg-cell" style={{background:dcfg.bg}} onClick={()=>cycleD(item,null)} title={readOnly?"":"Click to change"}>
                     <span style={{color:dcfg.c,fontWeight:700,fontSize:".74rem"}}>{dcfg.sym||"—"} {dmg||"—"}</span>
@@ -1167,6 +1190,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
   const[mn,setMn]=useState(today.m);
   const[showReqForm,setShowReqForm]=useState(false);
   const[showInvForm,setShowInvForm]=useState(false);
+  const[showReceivedLog,setShowReceivedLog]=useState(false);
   const[editItems,setEditItems]=useState(false);
   function prevMon(){if(mn===1){setYr(y=>y-1);setMn(12);}else setMn(m=>m-1);}
   function nextMon(){if(mn===12){setYr(y=>y+1);setMn(1);}else setMn(m=>m+1);}
@@ -1181,7 +1205,8 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
         </svg>
         <div style={{color:"rgba(255,255,255,.75)",fontSize:".82rem",flex:1,marginLeft:10}}>{session.propName} · {session.submitter}</div>
         {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"11px",color:"rgba(255,255,255,.55)",whiteSpace:"nowrap",marginRight:4}}><span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
-        <button className="btn-g" style={{padding:"6px 12px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E",marginRight:4}} onClick={()=>setShowInvForm(true)}>📦 Inventory Received</button>
+        <button className="btn-g" style={{padding:"6px 12px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E",marginRight:4}} onClick={()=>setShowInvForm(true)}>📦 Log Received</button>
+        <button style={{padding:"6px 12px",fontSize:".74rem",border:"1.5px solid "+(showReceivedLog?"#1B7A5E":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:showReceivedLog?"#1B7A5E":"transparent",marginRight:4}} onClick={()=>setShowReceivedLog(s=>!s)}>📋 Received Log</button>
         <button onClick={()=>setEditItems(m=>!m)} style={{padding:"6px 12px",fontSize:".74rem",border:"1.5px solid "+(editItems?"#0F5C4C":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:editItems?"#0F5C4C":"transparent",marginRight:4}}>{editItems?"✓ Done":"✏️ Edit Items"}</button>
         <button className="btn-req" style={{padding:"6px 12px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
         <button className="pm-exit" style={{marginLeft:8}} onClick={onLogout}>Exit ✕</button>
@@ -1209,9 +1234,16 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
           </div>)}
         </div>}
         {/* Received inventory log for this property */}
-        {(received||[]).filter(r=>r.propId===session.propId).length>0&&(
+        {showReceivedLog&&(
           <div style={{marginTop:24,background:"var(--white)",border:"1px solid var(--line)",borderRadius:12,padding:"14px 16px"}}>
-            <ReceivedLog received={(received||[]).filter(r=>r.propId===session.propId)} showProp={false}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontWeight:700,fontSize:".9rem"}}>📋 Inventory Received Log</div>
+              <button onClick={()=>setShowReceivedLog(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#9CA3AF",fontSize:16}}>✕</button>
+            </div>
+            {(received||[]).filter(r=>r.propId===session.propId).length===0
+              ?<div style={{color:"var(--ink3)",fontSize:".8rem",padding:"12px 0"}}>No inventory items received yet for {session.propName}.</div>
+              :<ReceivedLog received={(received||[]).filter(r=>r.propId===session.propId)} showProp={false}/>
+            }
           </div>
         )}
       </div>
@@ -1276,6 +1308,7 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
   const[exp,setExp]=useFirestore("seclude_exp",INIT_EXP,500);
+  useEffect(()=>{if(localStorage.getItem("seclude_cleared_exp_v1"))return;setExp([]);localStorage.setItem("seclude_cleared_exp_v1","1");},[]);
   const[sideOpen,setSideOpen]=useState(false);
   const today=todayYMD();
   const[yr,setYr]=useState(today.y);
@@ -1412,18 +1445,27 @@ function HQDashboard({requests,proc,exp,onNav}){
         <div className="stat" style={pending>0?{borderLeftColor:"#c2410c"}:{}}><div className="stat-l">Open Requests</div><div className="stat-v" style={pending>0?{color:"#b91c1c"}:{}}>{pending}</div><div className="stat-h" style={{display:"flex",alignItems:"center",gap:6}}><span>View in Requests</span>{pending>0&&<button onClick={()=>onNav("requests")} style={{fontSize:".65rem",background:"none",border:"none",color:"#c2410c",cursor:"pointer",textDecoration:"underline",padding:0}}>→</button>}</div></div>
         <div className="stat"><div className="stat-l">Purchases</div><div className="stat-v">{proc.length}</div><div className="stat-h">This month</div></div>
       </div>
-      <div className="dash-section-title">All Properties</div>
-      <div className="dash-props-grid dash-grid">
-        {activeProps.map(p=>{
-          const loc=LOCATIONS.find(l=>l.id===p.locationId);
-          return<div key={p.id} className="dash-prop-card" onClick={()=>onNav("properties",{prop:p.id})}>
-            <div className="dash-prop-loc">{loc?loc.name:""}</div>
-            <div className="dash-prop-name">{p.name}</div>
-            <div className="dash-prop-type">{p.type}</div>
-            <div className="dash-prop-rooms">{p.rooms.length} rooms</div>
-          </div>;
-        })}
-      </div>
+      {STATE_ORDER.map(state=>{
+        const locs=LOCATIONS.filter(l=>l.state===state);
+        if(!locs.length)return null;
+        return<div key={state}>
+          <div className="state-heading" style={{marginTop:8}}>{state}</div>
+          {locs.map(loc=>{
+            const props=loc.properties.filter(p=>p.rooms.length>0);
+            if(!props.length)return null;
+            return<div key={loc.id} className="loc-section" style={{marginBottom:12}}>
+              <div className="loc-heading" style={{marginBottom:8}}>{loc.icon} {loc.name}</div>
+              <div className="dash-props-grid dash-grid">
+                {props.map(p=><div key={p.id} className="dash-prop-card" onClick={()=>onNav("properties",{prop:p.id})}>
+                  <div className="dash-prop-name">{p.name}</div>
+                  <div className="dash-prop-type">{p.type}</div>
+                  <div className="dash-prop-rooms">{p.rooms.length} rooms</div>
+                </div>)}
+              </div>
+            </div>;
+          })}
+        </div>;
+      })}
     </div>
   );
 }
@@ -2174,6 +2216,12 @@ function App(){
     if(session){const js=JSON.stringify(session);try{localStorage.setItem('seclude_ops_session',js);}catch{}try{sessionStorage.setItem('seclude_ops_session',js);}catch{}}
     else{try{localStorage.removeItem('seclude_ops_session');}catch{}try{sessionStorage.removeItem('seclude_ops_session');}catch{}}
   },[session]);
+  // One-time clear of sample purchases data
+  useEffect(()=>{
+    if(localStorage.getItem("seclude_cleared_proc_v1"))return;
+    setProc([]);
+    localStorage.setItem("seclude_cleared_proc_v1","1");
+  },[]);
   useEffect(()=>{
     if(localStorage.getItem("seclude_seeded_v4"))return;
     const now=new Date();
