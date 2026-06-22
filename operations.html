@@ -188,8 +188,9 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
 .inv-file-btn:hover{border-color:var(--g);color:var(--g);background:var(--gl)}
 
 /* ── PROPERTY CARDS ───────────────────────────────── */
-.loc-section{margin-bottom:32px}
-.loc-heading{font-family:var(--fh);font-size:1.25rem;font-weight:600;color:var(--ink);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px}
+.state-heading{font-family:var(--fh);font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--g);background:var(--gxl);border:1px solid var(--gl);border-radius:7px;padding:5px 12px;margin:28px 0 14px;display:inline-block}
+.loc-section{margin-bottom:24px;padding-left:0}
+.loc-heading{font-family:var(--fh);font-size:1.1rem;font-weight:600;color:var(--ink);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px}
 .loc-state{font-size:.72rem;color:var(--ink3);font-family:var(--fm);font-weight:400;letter-spacing:.04em}
 .prop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .prop-card{background:var(--white);border-radius:12px;border:1px solid var(--line);padding:18px 20px;cursor:pointer;transition:.2s;position:relative}
@@ -312,34 +313,40 @@ const SEED_2026_03={"pangot-perch":{"Room Inventory":{"Blackbird":{"2026-03":{"W
 const {useState,useEffect,useRef}=React;
 
 /* ══ LOCATIONS ══════════════════════════════════════════════ */
+// North-to-south ordering within each state; states ordered northernmost to southernmost
 const LOCATIONS=[
-  {id:"shimla",name:"Shimla",icon:"🏛",state:"Uttarakhand",properties:[
+  // ── Himachal Pradesh (northernmost, ~29–32°N) ──────────────
+  {id:"palampur",name:"Palampur",icon:"🍃",state:"Himachal Pradesh",properties:[
+    {id:"two-stones",name:"Two Stones",type:"Heritage Bungalow",rooms:["Pukhraj","Panna","Neelam","Gomed"]},
+    {id:"one-love",name:"One Love",type:"Property",rooms:["Patanga","Jugnu","Titli","Bhanwra","Red Cedar Cottage"]},
+    {id:"tea-estate",name:"Tea Estate",type:"Resort",rooms:["Blueberry","Hibiscus","Matcha","Butterfly Pea","Saffron","Berry","Earl Grey","Kaffir Lime","Lavender","Peppermint","Herbal","Black Tea","Oolong","White Tea","Jasmine"]}]},
+  {id:"shimla",name:"Shimla",icon:"🏛",state:"Himachal Pradesh",properties:[
     {id:"taraview",name:"Taraview",type:"Heritage Home",rooms:["Sunbeam","Milkyway","Cosmos","Super Moon","Nebula","Shooting Star"]}]},
+  {id:"kasauli",name:"Kasauli",icon:"🎸",state:"Himachal Pradesh",properties:[
+    {id:"annies-song",name:"Annie's Song",type:"Resort",rooms:["Almost Heaven","Country Roads","Sleepy Blue","Silver Cloud","Night in the Forest","Starwood","This Old Guitar","Desert Rose","Fly Away","Frida Ka","Walk in the Rain"]}]},
+  {id:"nahan",name:"Nahan",icon:"🏰",state:"Himachal Pradesh",properties:[
+    {id:"bantony-cottage",name:"Bantony Cottage",type:"Heritage Resort",rooms:["Palash","Brijraj","Peepal Tree","Shamsher","Raanitaal","Sirmur Suite","Prakash","Maharaja","Maharani"]}]},
+  // ── Uttarakhand (~29–31°N) ────────────────────────────────
+  {id:"mussoorie",name:"Mussoorie",icon:"🏔",state:"Uttarakhand",properties:[
+    {id:"mussoorie",name:"Mussoorie",type:"Boutique Villa",rooms:["Red Red Wine","White Room","Purple Room","Wooden Room","Blue Moon","Yellow Room","Orange Room"]}]},
+  {id:"pangot",name:"Pangot",icon:"🦜",state:"Uttarakhand",properties:[
+    {id:"pangot-perch",name:"Pangot Perch",type:"Boutique Resort",rooms:["Blackbird","Blue Dasher","Butterfly","Dragonfly","Fireflies","Grasshopper","Ladybird","Queen Bee"]}]},
+  {id:"ramgarh",name:"Ramgarh",icon:"🌿",state:"Uttarakhand",properties:[
+    {id:"cliffs-edge",name:"Cliffs Edge",type:"Resort",rooms:["Vasant","Grishma","Varsha","Hemant","Sharath","Shishir","Kartik","Simha","Megha"]},
+    {id:"willows",name:"Willows",type:"Boutique Resort",rooms:["Blue Poppies","Happy Hydrangea","Olive Branch","Lazy Lillies","Sweet Irish","Cherry Blossom","Birds of Paradise","Honey Buttercup","Rustic Rose","Dainty Daisy","Snow Drop"]},
+    {id:"taradale",name:"Taradale",type:"Resort",rooms:["Rosefinch","Magpie","Parakeet","Myna","Cuckoo","Sunbird"]}]},
+  // ── Goa (~15.5°N) ────────────────────────────────────────
+  {id:"goa",name:"Goa",icon:"🌊",state:"Goa",properties:[
+    {id:"falling-cashews",name:"Falling Cashews",type:"Portuguese Villa",location:"Chorao",rooms:["The Double","The Twin"]}]},
+  // ── Karnataka (~15°N) ────────────────────────────────────
+  {id:"hampi",name:"Hampi",icon:"🪨",state:"Karnataka",properties:[
+    {id:"hampi-1800",name:"Hampi 1800",type:"Heritage Resort",location:"Sandur, Karnataka",rooms:["Sugriva Red","Tungabhadra Blue","Bazaar Yellow","Kishkindha Green","Lotus Pink","Matanga Purple"]}]},
+  // ── Kerala (~8–11°N, southernmost) ───────────────────────
   {id:"kerala",name:"Kerala",icon:"🌴",state:"Kerala",properties:[
     {id:"karthika-nivas",name:"Karthika Nivas",type:"Heritage Home",location:"Thrissur",rooms:["Tejas","Vayu","Akash","Prithvi","Apas"]},
     {id:"marari-sand",name:"Marari Sand",type:"Private Cottages",location:"Marari",rooms:["Royal Villa 1","Royal Villa 2","Royal Villa 3","Royal Villa 4","Royal Villa 5","Royal Villa 6","Premium Villa 1","Premium Villa 2","Premium Villa 3","Pool View 1","Pool View 2","Pool View 3","Pool View 4"]},
     {id:"beach-house",name:"Beach House",type:"Beach House",location:"Kattoor Beach",rooms:["Pristine","Barefoot"]},
     {id:"by-the-lake",name:"By the Lake",type:"Villa",location:"Alleppey",rooms:["Blue Villa","Sunrise Villa","Green Villa"]}]},
-  {id:"kasauli",name:"Kasauli",icon:"🎸",state:"Himachal Pradesh",properties:[
-    {id:"annies-song",name:"Annie's Song",type:"Resort",rooms:["Almost Heaven","Country Roads","Sleepy Blue","Silver Cloud","Night in the Forest","Starwood","This Old Guitar","Desert Rose","Fly Away","Frida Ka","Walk in the Rain"]}]},
-  {id:"mussoorie",name:"Mussoorie",icon:"🏔",state:"Uttarakhand",properties:[
-    {id:"mussoorie",name:"Mussoorie",type:"Boutique Villa",rooms:["Red Red Wine","White Room","Purple Room","Wooden Room","Blue Moon","Yellow Room","Orange Room"]}]},
-  {id:"palampur",name:"Palampur",icon:"🍃",state:"Himachal Pradesh",properties:[
-    {id:"two-stones",name:"Two Stones",type:"Heritage Bungalow",rooms:["Pukhraj","Panna","Neelam","Gomed"]},
-    {id:"one-love",name:"One Love",type:"Property",rooms:["Patanga","Jugnu","Titli","Bhanwra","Red Cedar Cottage"]},
-    {id:"tea-estate",name:"Tea Estate",type:"Resort",rooms:["Blue Berry","Hibiscus","Macha","Butterfly","Saffron","Berry","Early Grey","Kafir Lime","Lavender","Peppermint","Herbal","Black Tea","Oolong"]}]},
-  {id:"ramgarh",name:"Ramgarh",icon:"🌿",state:"Uttarakhand",properties:[
-    {id:"cliffs-edge",name:"Cliffs Edge",type:"Resort",rooms:["Vasant","Grishma","Varsha","Hemant","Sharath","Shishir","Kartik","Simha","Megha"]},
-    {id:"willows",name:"Willows",type:"Boutique Resort",rooms:["Blue Poppies","Happy hydrengia","Olive branch","Lazy lillies","Sweet irish","Cherry blossom","Birds of paradise","Honey butter cup","Rustic rose","Dainty Daisy","Snow Drop"]},
-    {id:"taradale",name:"Taradale",type:"Resort",rooms:["Rosefinch","Magpie","Parakeet","Myna","Cuckoo","Sunbird"]}]},
-  {id:"goa",name:"Goa",icon:"🌊",state:"Goa",properties:[
-    {id:"falling-cashews",name:"Falling Cashews",type:"Portuguese Villa",location:"Chorao",rooms:["The Double","The Twin"]}]},
-  {id:"nahan",name:"Nahan",icon:"🏰",state:"Himachal Pradesh",properties:[
-    {id:"bantony-cottage",name:"Bantony Cottage",type:"Heritage Resort",rooms:["Palash","Brijraj","Peepal Tree","Shamsher","Raanitaal","Sirmur Suite","Prakash","Maharaja","Maharani"]}]},
-  {id:"pangot",name:"Pangot",icon:"🦜",state:"Uttarakhand",properties:[
-    {id:"pangot-perch",name:"Pangot Perch",type:"Boutique Resort",rooms:["Blackbird","Blue Dasher","Butterfly","Dragonfly","Fireflies","Grasshopper","Ladybird","Queen Bee"]}]},
-  {id:"hampi",name:"Hampi",icon:"🪨",state:"Karnataka",properties:[
-    {id:"hampi-1800",name:"Hampi 1800",type:"Heritage Resort",location:"Sandur, Karnataka",rooms:["Sugriva Red","Tungabhadra Blue","Bazaar Yellow","Kishkindha Green","Lotus Pink","Matanga Purple"]}]},
 ];
 const ALL_PROPS=LOCATIONS.flatMap(l=>l.properties.map(p=>({...p,location:p.location||l.name,locationId:l.id,locationName:l.name,locIcon:l.icon})));
 
@@ -479,19 +486,8 @@ const HQ_USERS=[
   {id:2,name:"Ops Manager",email:"ops@seclude.in",password:"seclude@ops",role:"Manager"},
   {id:3,name:"Viewer",email:"viewer@seclude.in",password:"seclude@view",role:"Viewer"},
 ];
-const INIT_PROC=[
-  {id:1,purchaseDate:"05-06-2026",item:"Extra Beds",qty:4,unitPrice:2500,price:10000,vendor:"HO Godown",property:"Willows",category:"Furniture",warranty:"1 year",invoiceNo:"INV-001",invoiceFile:null,notes:""},
-  {id:2,purchaseDate:"05-06-2026",item:"Bath Towels",qty:20,unitPrice:100,price:2000,vendor:"HO Godown",property:"Willows",category:"Bathroom",warranty:"",invoiceNo:"INV-002",invoiceFile:null,notes:""},
-  {id:3,purchaseDate:"02-06-2026",item:"Electric Kettle",qty:2,unitPrice:1200,price:2400,vendor:"Amazon",property:"Pangot Perch",category:"Electronics",warranty:"6 months",invoiceNo:"AMZ-8821",invoiceFile:null,notes:""},
-  {id:4,purchaseDate:"02-06-2026",item:"Hairdryer",qty:1,unitPrice:1100,price:1100,vendor:"Amazon",property:"Pangot Perch",category:"Electronics",warranty:"6 months",invoiceNo:"AMZ-8822",invoiceFile:null,notes:""},
-  {id:5,purchaseDate:"28-05-2026",item:"Bath Mats",qty:12,unitPrice:200,price:2400,vendor:"Textile Hub Delhi",property:"Bantony Cottage",category:"Bathroom",warranty:"",invoiceNo:"THD-204",invoiceFile:null,notes:""},
-  {id:6,purchaseDate:"28-05-2026",item:"Pillow Cases",qty:20,unitPrice:120,price:2400,vendor:"Textile Hub Delhi",property:"Bantony Cottage",category:"Room Linen",warranty:"",invoiceNo:"THD-205",invoiceFile:null,notes:""},
-];
-const INIT_EXP=[
-  {id:1,date:"01-06-2026",item:"Monthly inventory delivery charges",price:15000,vendor:"Bus Transport Ltd.",property:"All",department:"Ops",approvedBy:"Ramit Sethi",warranty:"",invoiceNo:"BT-5501",invoiceFile:null,notes:""},
-  {id:2,date:"01-06-2026",item:"Cloud storage — invoices & photos",price:3500,vendor:"Cloudinary",property:"All",department:"IT",approvedBy:"Ramit Sethi",warranty:"",invoiceNo:"CLOUD-2026",invoiceFile:null,notes:"Annual subscription"},
-  {id:3,date:"03-06-2026",item:"Genset fuel top-up",price:2200,vendor:"HP Petrol Pump",property:"Willows",department:"Ops",approvedBy:"Ops Manager",warranty:"",invoiceNo:"HP-8812",invoiceFile:null,notes:""},
-];
+const INIT_PROC=[];
+const INIT_EXP=[];
 
 /* ══ LIGHTBOX ═══════════════════════════════════════════════ */
 function Lightbox({src,onClose}){
@@ -1196,26 +1192,33 @@ function HQDashboard({requests,proc,exp,onNav}){
 }
 
 /* ══ HQ PROPERTY LIST ═══════════════════════════════════════ */
+const STATE_ORDER=["Himachal Pradesh","Uttarakhand","Goa","Karnataka","Kerala"];
 function HQPropList({onSelect}){
+  // Group locations by state, preserving north-to-south order within each state
+  const byState=STATE_ORDER.map(s=>({state:s,locs:LOCATIONS.filter(l=>l.state===s)})).filter(g=>g.locs.length);
   return(
     <div>
       <div className="pg-title">Properties</div>
       <div className="pg-sub">Select a property to view its monthly inventory checklist</div>
-      {LOCATIONS.map(loc=>(
-        <div key={loc.id} className="loc-section">
-          <div className="loc-heading">
-            {loc.name}
-            <span className="loc-state">{loc.state}</span>
-          </div>
-          <div className="prop-grid">
-            {loc.properties.map(p=>(
-              <div key={p.id} className="prop-card" onClick={()=>onSelect(p.id)}>
-                <div className="prop-card-name">{p.name}</div>
-                <div className="prop-card-type">{p.type}</div>
-                <div className="prop-card-rooms">{p.rooms.length>0?`${p.rooms.length} rooms · ${p.rooms.slice(0,3).join(", ")}${p.rooms.length>3?" …":""}` :"Inventory – qty to be updated"}</div>
+      {byState.map(({state,locs})=>(
+        <div key={state}>
+          <div className="state-heading">{state}</div>
+          {locs.map(loc=>(
+            <div key={loc.id} className="loc-section">
+              <div className="loc-heading">
+                {loc.icon} {loc.name}
               </div>
-            ))}
-          </div>
+              <div className="prop-grid">
+                {loc.properties.map(p=>(
+                  <div key={p.id} className="prop-card" onClick={()=>onSelect(p.id)}>
+                    <div className="prop-card-name">{p.name}</div>
+                    <div className="prop-card-type">{p.type}</div>
+                    <div className="prop-card-rooms">{p.rooms.length>0?`${p.rooms.length} rooms · ${p.rooms.slice(0,3).join(", ")}${p.rooms.length>3?" …":""}` :"Inventory – qty to be updated"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
     </div>
