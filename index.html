@@ -1866,7 +1866,11 @@ async function fetchConfirmationMsg(token, msgId){
       }
     }catch(e){console.warn('[GmailSync] attachment fetch failed',attId,e);}
   }
-  return{parsed:parseDjuboBooking(body,msgId,subject),subject};
+  const emailDate=full.internalDate?new Date(parseInt(full.internalDate)).toISOString().slice(0,10):null;
+  const parsed=parseDjuboBooking(body,msgId,subject);
+  if(parsed&&emailDate&&!parsed.addedOn)parsed.addedOn=emailDate;
+  if(parsed&&emailDate)parsed.emailReceivedDate=emailDate;
+  return{parsed,subject};
 }
 
 async function syncGmailBookings(token, existingBookings, setBookings, setSyncLog, setLastSync, lastSync){
@@ -2158,7 +2162,7 @@ function BookingDetail({booking,session,onBack,onEdit,onUpdateBooking,roomRates}
 
     <div style={{marginBottom:12}}>
       <div style={{fontFamily:"var(--fh)",fontSize:isMobile?"1.15rem":"1.5rem",fontWeight:600,marginBottom:2}}>{booking.guestName}</div>
-      <div style={{fontSize:".72rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginBottom:8}}>{booking.reservationId} · {booking.property} · Added by {booking.addedById?SALES_USERS.find(u=>u.id===booking.addedById)?.name||"—":booking.createdBy}</div>
+      <div style={{fontSize:".72rem",color:"var(--ink3)",fontFamily:"var(--fm)",marginBottom:8}}>{booking.reservationId} · {booking.property} · Booked {booking.addedOn||booking.emailReceivedDate||"—"} · Added by {booking.addedById?SALES_USERS.find(u=>u.id===booking.addedById)?.name||"—":booking.createdBy}</div>
       <div style={{display:"flex",gap:6,alignItems:"center",overflowX:isMobile?"auto":"visible",flexWrap:isMobile?"nowrap":"wrap",WebkitOverflowScrolling:"touch",paddingBottom:isMobile?4:0}}>
         <select value={booking.status} onChange={e=>updateStatus("status",e.target.value)} style={{border:"1.5px solid var(--line)",borderRadius:7,padding:"5px 9px",fontSize:".75rem",cursor:"pointer",background:"var(--white)",flexShrink:0}}>
           {BOOKING_STATUSES.map(s=><option key={s}>{s}</option>)}
@@ -2410,6 +2414,7 @@ function BookingsList({bookings,session,onSelect,onAdd}){
     if(upsellF!=="All")b=b.filter(x=>x.upsellStatus===upsellF);
     b.sort((a,z)=>{
       if(sortF==="checkIn")return(a.checkIn||"").localeCompare(z.checkIn||"");
+      if(sortF==="addedOn")return(z.addedOn||z.emailReceivedDate||"").localeCompare(a.addedOn||a.emailReceivedDate||"");
       if(sortF==="score"){const sa=hotScore(a).score,sz=hotScore(z).score;return sz-sa;}
       if(sortF==="guestName")return(a.guestName||"").localeCompare(z.guestName||"");
       return 0;
@@ -2469,7 +2474,8 @@ function BookingsList({bookings,session,onSelect,onAdd}){
         </select>
         <select value={sortF} onChange={e=>setSortF(e.target.value)}>
           <option value="score">Sort: 🔥 Priority</option>
-          <option value="checkIn">Sort: Check-in</option>
+          <option value="checkIn">Sort: Check-in date</option>
+          <option value="addedOn">Sort: Booked on (newest)</option>
           <option value="guestName">Sort: Name</option>
         </select>
       </div>
@@ -2483,11 +2489,20 @@ function BookingsList({bookings,session,onSelect,onAdd}){
         const restGroups=(()=>{
           const g={};
           nonHot.forEach(b=>{
-            const br=getDateBracket(b.checkIn);
-            if(!g[br.label])g[br.label]={label:br.label,order:br.order,items:[]};
-            g[br.label].items.push(b);
+            let label,order;
+            if(sortF==="addedOn"){
+              const d=b.addedOn||b.emailReceivedDate||"";
+              label=d?"Booked on "+d:"Booked on — unknown date";
+              order=d?-d.replace(/-/g,""):"0";
+            }else{
+              const br=getDateBracket(b.checkIn);label=br.label;order=br.order;
+            }
+            if(!g[label])g[label]={label,order,items:[]};
+            g[label].items.push(b);
           });
-          return Object.values(g).sort((a,z)=>a.order-z.order);
+          return Object.values(g).sort((a,z)=>
+            sortF==="addedOn"?String(a.order).localeCompare(String(z.order)):a.order-z.order
+          );
         })();
         return(
           <div>
@@ -2554,6 +2569,7 @@ function BookingsList({bookings,session,onSelect,onAdd}){
                             )}
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                            {(b.addedOn||b.emailReceivedDate)&&<span style={{fontSize:".6rem",fontFamily:"var(--fm)",color:"#7C3AED",background:"#EDE9FE",padding:"1px 5px",borderRadius:3,whiteSpace:"nowrap"}}>📅 {b.addedOn||b.emailReceivedDate}</span>}
                             {dCI>=0&&<span style={{fontSize:".66rem",fontFamily:"var(--fm)",color:"var(--ink3)",whiteSpace:"nowrap"}}>{fmtDateShort(b.checkIn)}</span>}
                             <span className={"sb "+(UPSELL_CLASS[b.upsellStatus]||"sb-pending")} style={{fontSize:".58rem"}}>{b.upsellStatus}</span>
                             {b.guestPhone&&<a href={waLink(b,'details')} target="_blank" rel="noopener noreferrer" title="Send WhatsApp" style={{display:"flex",alignItems:"center",justifyContent:"center",width:24,height:24,background:"#25D366",borderRadius:5,textDecoration:"none",fontSize:".82rem",flexShrink:0}}>💬</a>}

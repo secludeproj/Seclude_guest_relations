@@ -121,7 +121,7 @@ input,select,textarea{font-family:var(--ff);font-size:16px}
 .mon-label{font-family:var(--fh);font-size:1rem;font-weight:600;min-width:140px;text-align:center}
 
 .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
-.xl-wrap{overflow-x:scroll;overflow-y:auto;border-radius:11px;border:1px solid var(--ld);background:var(--white);max-height:70vh;width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c5d0dc #f1f5f9}
+.xl-wrap{overflow:scroll;border-radius:11px;border:1px solid var(--ld);background:var(--white);max-height:70vh;width:100%;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c5d0dc #f1f5f9;cursor:default}
 .xl-wrap::-webkit-scrollbar{width:7px;height:7px}
 .xl-wrap::-webkit-scrollbar-track{background:#f1f5f9}
 .xl-wrap::-webkit-scrollbar-thumb{background:#c5d0dc;border-radius:5px}
@@ -588,6 +588,40 @@ function Login({onLogin}){
 }
 
 /* ══ PM EXCEL TABLE ════════════════════════════════════════ */
+/* Drag-to-scroll: click-drag anywhere on the table scrolls it */
+function useDragScroll(){
+  const ref=useRef(null);
+  useEffect(()=>{
+    const el=ref.current;if(!el)return;
+    let active=false,sx=0,sy=0,sl=0,st=0;
+    function onDown(e){
+      if(e.button!==0)return;
+      // Don't hijack clicks on interactive elements or drag handles
+      if(e.target.closest('input,button,label,select,textarea,a,[draggable="true"]'))return;
+      active=true;sx=e.pageX;sy=e.pageY;sl=el.scrollLeft;st=el.scrollTop;
+      el.style.cursor='grabbing';el.style.userSelect='none';
+    }
+    function onMove(e){
+      if(!active)return;
+      el.scrollLeft=sl-(e.pageX-sx);
+      el.scrollTop=st-(e.pageY-sy);
+    }
+    function onUp(){
+      if(!active)return;
+      active=false;el.style.cursor='';el.style.userSelect='';
+    }
+    el.addEventListener('mousedown',onDown);
+    window.addEventListener('mousemove',onMove);
+    window.addEventListener('mouseup',onUp);
+    return()=>{
+      el.removeEventListener('mousedown',onDown);
+      window.removeEventListener('mousemove',onMove);
+      window.removeEventListener('mouseup',onUp);
+    };
+  },[]);
+  return ref;
+}
+
 function useIsMobile(){
   const[mob,setMob]=useState(()=>window.innerWidth<641);
   useEffect(()=>{
@@ -597,6 +631,7 @@ function useIsMobile(){
   return mob;
 }
 function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readOnly,customItems,setCustomItems,editItems}){
+  const scrollRef=useDragScroll();
   const[lightbox,setLightbox]=useState(null);
   const[addInputs,setAddInputs]=useState({});
   const[dragRoom,setDragRoom]=useState(null);
@@ -834,7 +869,7 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
   return(
     <>
     {lightbox&&<Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>}
-    <div className="xl-wrap">
+    <div className="xl-wrap" ref={scrollRef}>
       <table className="xl-tbl">
         <thead>
           {isRoom&&<tr>
