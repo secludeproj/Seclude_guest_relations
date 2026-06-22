@@ -601,6 +601,9 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
   const[addInputs,setAddInputs]=useState({});
   const[dragRoom,setDragRoom]=useState(null);
   const[dragOverRoom,setDragOverRoom]=useState(null);
+  const[dragItem,setDragItem]=useState(null);
+  const[dragOverItem,setDragOverItem]=useState(null);
+  const[dragItemGroup,setDragItemGroup]=useState(null);
   const isMobile=useIsMobile();
   const mk=monthKey(yr,mn);
   const propInv=INV[propId]||{};
@@ -620,7 +623,11 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
   let subcats=isRoom?null:{...(areaData.subcats||{})};
   if(isRoom){
     const cRoom=cPropItems["__room"]||[];
-    items=[...new Set([...items,...cRoom])].filter(i=>!deleted.includes(i));
+    const rawItems=[...new Set([...items,...cRoom])].filter(i=>!deleted.includes(i));
+    const customItemOrder=cPropItems["__itemOrder"]||null;
+    items=customItemOrder&&customItemOrder.length
+      ?[...new Set([...customItemOrder,...rawItems])].filter(i=>rawItems.includes(i))
+      :rawItems;
   }else{
     Object.entries(cPropItems).forEach(([sc,its])=>{
       if(sc==="__room"||sc==="__deleted"||sc.startsWith("__"))return;
@@ -646,6 +653,38 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
     setDragRoom(null);setDragOverRoom(null);
   }
   function handleRoomDragEnd(){setDragRoom(null);setDragOverRoom(null);}
+
+  // Drag-to-reorder item rows (edit mode only)
+  function handleItemDragStart(e,item,group){e.stopPropagation();setDragItem(item);setDragItemGroup(group);e.dataTransfer.effectAllowed="move";}
+  function handleItemDragOver(e,item,group){e.preventDefault();e.stopPropagation();if(group===dragItemGroup)setDragOverItem(item);}
+  function handleItemDrop(e,target,group){
+    e.preventDefault();e.stopPropagation();
+    if(!dragItem||dragItem===target||group!==dragItemGroup||!setCustomItems)return;
+    // Determine source list
+    const isSSKey=group&&group.startsWith("__ss_");
+    let srcList;
+    if(isSSKey){
+      const label=group.replace("__ss_","");
+      const defItems=(INV[propId]?.[area]?.subSections||[]).find(s=>s.label===label)?.items||[];
+      const cKey="__itemOrder_"+label;
+      const raw=[...new Set([...(cPropItems[cKey]||defItems),...(cPropItems[group]||[])])].filter(i=>!deleted.includes(i));
+      srcList=raw;
+    }else{
+      srcList=[...items];
+    }
+    const fi=srcList.indexOf(dragItem);const ti=srcList.indexOf(target);
+    if(fi<0||ti<0){setDragItem(null);setDragOverItem(null);setDragItemGroup(null);return;}
+    const ordered=[...srcList];ordered.splice(fi,1);ordered.splice(ti,0,dragItem);
+    setCustomItems(prev=>{
+      const n=JSON.parse(JSON.stringify(prev||{}));
+      if(!n[propId])n[propId]={};if(!n[propId][area])n[propId][area]={};
+      if(isSSKey){const label=group.replace("__ss_","");n[propId][area]["__itemOrder_"+label]=ordered;}
+      else{n[propId][area]["__itemOrder"]=ordered;}
+      return n;
+    });
+    setDragItem(null);setDragOverItem(null);setDragItemGroup(null);
+  }
+  function handleItemDragEnd(){setDragItem(null);setDragOverItem(null);setDragItemGroup(null);}
 
   function removeItem(item,subcat){
     if(!setCustomItems)return;
@@ -798,8 +837,15 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
           {isRoom
             ?[
               // Main room items
-              ...items.map(item=><tr key={item}>
-                <td className="item-col">{item}</td>
+              ...items.map(item=><tr key={item}
+                draggable={!!editItems}
+                onDragStart={editItems?e=>handleItemDragStart(e,item,null):undefined}
+                onDragOver={editItems?e=>handleItemDragOver(e,item,null):undefined}
+                onDrop={editItems?e=>handleItemDrop(e,item,null):undefined}
+                onDragEnd={editItems?handleItemDragEnd:undefined}
+                style={{opacity:dragOverItem===item&&dragItemGroup===null&&dragItem!==item?.5:1,outline:dragOverItem===item&&dragItemGroup===null&&dragItem!==item?"2px dashed #0F5C4C":"none",transition:"opacity .1s"}}
+              >
+                <td className="item-col" style={{cursor:editItems?"grab":"default"}}>{editItems?<span title="Drag to reorder">⠿ {item}</span>:item}</td>
                 {rooms.map(room=>{
                   const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
                   return<React.Fragment key={room}>
@@ -818,7 +864,11 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
               // Sub-sections: Guest Amenities, Washroom, etc.
               ...(areaData.subSections||[]).flatMap(ss=>{
                 const ssKey="__ss_"+ss.label;
-                const ssItems=[...(ss.items||[]).filter(i=>!deleted.includes(i)),...(cPropItems[ssKey]||[])];
+                const rawSsItems=[...(ss.items||[]).filter(i=>!deleted.includes(i)),...(cPropItems[ssKey]||[])];
+                const customSsOrder=cPropItems["__itemOrder_"+ss.label]||null;
+                const ssItems=customSsOrder&&customSsOrder.length
+                  ?[...new Set([...customSsOrder,...rawSsItems])].filter(i=>rawSsItems.includes(i))
+                  :rawSsItems;
                 const colCount=rooms.length*(isMobile?2:3);
                 return[
                   // Sub-section header row
@@ -834,8 +884,15 @@ function PMExcelTable({propId,area,yr,mn,checks,setChecks,photos,setPhotos,readO
                     {editItems&&<td style={{background:"#E8F3F0",borderTop:"2px solid var(--gl)"}}/>}
                   </tr>,
                   // Sub-section items
-                  ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item}>
-                    <td className="item-col" style={{paddingLeft:22}}>{item}</td>
+                  ...ssItems.map(item=><tr key={"ss-"+ss.label+"-"+item}
+                    draggable={!!editItems}
+                    onDragStart={editItems?e=>handleItemDragStart(e,item,ssKey):undefined}
+                    onDragOver={editItems?e=>handleItemDragOver(e,item,ssKey):undefined}
+                    onDrop={editItems?e=>handleItemDrop(e,item,ssKey):undefined}
+                    onDragEnd={editItems?handleItemDragEnd:undefined}
+                    style={{opacity:dragOverItem===item&&dragItemGroup===ssKey&&dragItem!==item?.5:1,outline:dragOverItem===item&&dragItemGroup===ssKey&&dragItem!==item?"2px dashed #0F5C4C":"none",transition:"opacity .1s"}}
+                  >
+                    <td className="item-col" style={{paddingLeft:22,cursor:editItems?"grab":"default"}}>{editItems?<span title="Drag to reorder">⠿ {item}</span>:item}</td>
                     {rooms.map(room=>{
                       const dmg=getV(item,room,"damage");const qty=getV(item,room,"qty");const dcfg=DMG[dmg]||DMG[""];
                       return<React.Fragment key={room}>
