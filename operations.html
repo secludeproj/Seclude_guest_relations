@@ -1274,6 +1274,47 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
   const[showInvForm,setShowInvForm]=useState(false);
   const[showReceivedLog,setShowReceivedLog]=useState(false);
   const[editItems,setEditItems]=useState(false);
+  const[syncing,setSyncing]=useState(false);
+  const[syncMsg,setSyncMsg]=useState(null);
+  const SYNC_KEYS=["seclude_checks","seclude_requests","seclude_custom_items","seclude_proc_v2","seclude_received","seclude_office_items","seclude_exp"];
+  async function mergeLocalToFirestore(){
+    if(!window.db)return;
+    for(const key of SYNC_KEYS){
+      try{
+        const raw=localStorage.getItem(key);if(!raw)continue;
+        const localData=JSON.parse(raw);
+        const snap=await window.db.collection("ops").doc(key).get();
+        const merged=snap.exists?{...snap.data().v,...localData}:localData;
+        await window.db.collection("ops").doc(key).set({v:merged,_ts:Date.now()});
+      }catch(e){console.warn("[AutoSync]",key,e);}
+    }
+  }
+  useEffect(()=>{
+    const handler=()=>{mergeLocalToFirestore();};
+    window.addEventListener("beforeunload",handler);
+    return()=>window.removeEventListener("beforeunload",handler);
+  },[]);
+  async function forceSyncToFirestore(){
+    if(!window.db){setSyncMsg("No connection – try again when online.");return;}
+    setSyncing(true);setSyncMsg(null);
+    const KEYS=["seclude_checks","seclude_requests","seclude_custom_items","seclude_proc_v2","seclude_received","seclude_office_items","seclude_exp"];
+    let ok=0,fail=0;
+    for(const key of KEYS){
+      try{
+        const raw=localStorage.getItem(key);
+        if(!raw)continue;
+        const localData=JSON.parse(raw);
+        // Fetch current Firestore state, then merge local on top — never clobber other properties
+        const snap=await window.db.collection("ops").doc(key).get();
+        const merged=snap.exists?{...snap.data().v,...localData}:localData;
+        await window.db.collection("ops").doc(key).set({v:merged,_ts:Date.now()});
+        ok++;
+      }catch(e){fail++;console.warn("[ForceSync]",key,e);}
+    }
+    setSyncing(false);
+    setSyncMsg(fail===0?`✓ Synced ${ok} items to HQ!`:`Done – ${ok} synced, ${fail} failed. Try again.`);
+    setTimeout(()=>setSyncMsg(null),6000);
+  }
   function prevMon(){if(mn===1){setYr(y=>y-1);setMn(12);}else setMn(m=>m-1);}
   function nextMon(){if(mn===12){setYr(y=>y+1);setMn(1);}else setMn(m=>m+1);}
   const myReqs=(requests||[]).filter(r=>r.propId===session.propId).slice(0,5);
@@ -1289,6 +1330,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
           </svg>
           <div style={{color:"rgba(255,255,255,.7)",fontSize:".8rem",flex:1,marginLeft:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.propName} · {session.submitter}</div>
           {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,.5)",whiteSpace:"nowrap",flexShrink:0}}><span style={{width:"5px",height:"5px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
+          <button onClick={forceSyncToFirestore} disabled={syncing} style={{marginLeft:4,padding:"5px 10px",fontSize:".7rem",border:"1.5px solid rgba(255,255,255,.3)",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:syncing?"#0F5C4C":"transparent",whiteSpace:"nowrap",flexShrink:0}}>{syncing?"Syncing…":"⬆ Sync"}</button>
           <button className="pm-exit" style={{marginLeft:4}} onClick={onLogout}>✕ Exit</button>
         </div>
         <div className="pm-btn-row">
@@ -1298,6 +1340,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
           <button className="btn-req" style={{padding:"6px 11px",fontSize:".74rem"}} onClick={()=>setShowReqForm(true)}>📮 Request to HQ</button>
         </div>
       </div>
+      {syncMsg&&<div style={{background:syncMsg.startsWith("✓")?"#DCFCE7":"#FEF3C7",color:syncMsg.startsWith("✓")?"#15803D":"#92400E",padding:"10px 16px",fontSize:".8rem",fontWeight:600,textAlign:"center"}}>{syncMsg}</div>}
       <div className="pm-body">
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:12}}>
           <div><div style={{fontWeight:700,fontSize:"1.05rem"}}>{session.propName}</div><div style={{fontSize:".76rem",color:"var(--ink3)"}}>Monthly inventory check · {session.submitter}</div></div>
