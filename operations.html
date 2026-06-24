@@ -515,6 +515,7 @@ const HQ_USERS=[
   {id:1,name:"Rishita Narwal",email:"admin@seclude.in",password:"seclude@admin",role:"Admin"},
   {id:2,name:"Ops Manager",email:"ops@seclude.in",password:"seclude@ops",role:"Manager"},
   {id:3,name:"Viewer",email:"viewer@seclude.in",password:"seclude@view",role:"Viewer"},
+  {id:4,name:"Kalpana",email:"kalpana@seclude.in",password:"Seclude@Kalpana1",role:"Admin"},
 ];
 const INIT_PROC=[];
 const INIT_EXP=[];
@@ -1454,6 +1455,7 @@ function ReceivedLog({received,showProp=true}){
 
 /* ══ HQ APP ═════════════════════════════════════════════════ */
 function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc,received,setReceived}){
+  const isViewer=session.user.role==="Viewer";
   const[page,setPage]=useState("dashboard");
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
@@ -1540,11 +1542,11 @@ function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setR
         <div id="content">
           {page==="dashboard"&&<HQDashboard requests={requests||[]} proc={proc} exp={exp} onNav={nav}/>}
           {page==="properties"&&!selProp&&<HQPropList onSelect={p=>nav("properties",{prop:p})}/>}
-          {page==="properties"&&curProp&&<HQPropDetail prop={curProp} area={propArea} setArea={setPropArea} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} yr={yr} mn={mn} setYr={setYr} setMn={setMn} onBack={()=>setSelProp(null)} customItems={customItems} setCustomItems={setCustomItems}/>}
-          {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests} proc={proc} setProc={setProc} received={received} setReceived={setReceived}/>}
+          {page==="properties"&&curProp&&<HQPropDetail prop={curProp} area={propArea} setArea={setPropArea} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} yr={yr} mn={mn} setYr={setYr} setMn={setMn} onBack={()=>setSelProp(null)} customItems={customItems} setCustomItems={setCustomItems} isViewer={isViewer}/>}
+          {page==="requests"&&<HQRequests requests={requests||[]} setRequests={setRequests} proc={proc} setProc={setProc} received={received} setReceived={setReceived} isViewer={isViewer}/>}
           {page==="received"&&<ReceivedLog received={received} showProp={true}/>}
-          {page==="purchases"&&<HQPurchases proc={proc} setProc={setProc}/>}
-          {page==="expenses"&&<HQExpenses exp={exp} setExp={setExp}/>}
+          {page==="purchases"&&<HQPurchases proc={proc} setProc={setProc} isViewer={isViewer}/>}
+          {page==="expenses"&&<HQExpenses exp={exp} setExp={setExp} isViewer={isViewer}/>}
           {page==="reports"&&<HQReports proc={proc} exp={exp}/>}
         </div>
         <BottomNav page={page} nav={nav} pendingReqs={pendingReqs} onLogout={onLogout}/>
@@ -1661,7 +1663,7 @@ function HQPropList({onSelect}){
 }
 
 /* ══ HQ PROPERTY DETAIL ════════════════════════════════════ */
-function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn,setYr,setMn,onBack,customItems,setCustomItems}){
+function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn,setYr,setMn,onBack,customItems,setCustomItems,isViewer}){
   const[editMode,setEditMode]=useState(false);
   function prevMon(){if(mn===1){setYr(y=>y-1);setMn(12);}else setMn(m=>m-1);}
   function nextMon(){if(mn===12){setYr(y=>y+1);setMn(1);}else setMn(m=>m+1);}
@@ -1669,11 +1671,12 @@ function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
         <button className="back-btn" style={{margin:0}} onClick={onBack}>← Back</button>
-        <button
+        {!isViewer&&<button
           onClick={()=>setEditMode(m=>!m)}
           style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid "+(editMode?"var(--g)":"var(--line)"),background:editMode?"var(--g)":"var(--white)",color:editMode?"#fff":"var(--ink2)",fontSize:".8rem",fontWeight:600,cursor:"pointer",fontFamily:"var(--ff)",display:"flex",alignItems:"center",gap:5}}>
           {editMode?"✓ Done Editing":"✏️ Edit Inventory"}
-        </button>
+        </button>}
+        {isViewer&&<span style={{fontSize:".72rem",color:"var(--ink3)",background:"var(--sm)",padding:"4px 10px",borderRadius:6}}>👁 View only</span>}
         {editMode&&<span style={{fontSize:".72rem",color:"var(--g)",fontWeight:600}}>Editing mode — changes are saved automatically</span>}
       </div>
       <div style={{background:"var(--white)",border:"1px solid var(--line)",borderRadius:11,padding:"16px 18px",marginBottom:14,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
@@ -1691,13 +1694,13 @@ function HQPropDetail({prop,area,setArea,checks,setChecks,photos,setPhotos,yr,mn
       {!editMode&&<div style={{fontSize:".72rem",color:"var(--ink3)",marginBottom:10,fontFamily:"var(--fm)",background:"var(--gxl)",border:"1px solid var(--gl)",borderRadius:7,padding:"6px 12px"}}>
         HQ view · Click <strong>✏️ Edit Inventory</strong> to make changes · Click 📷 to upload photos
       </div>}
-      <PMExcelTable propId={prop.id} area={area} yr={yr} mn={mn} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} readOnly={!editMode} customItems={customItems} setCustomItems={setCustomItems} editItems={editMode}/>
+      <PMExcelTable propId={prop.id} area={area} yr={yr} mn={mn} checks={checks} setChecks={setChecks} photos={photos} setPhotos={setPhotos} readOnly={isViewer||!editMode} customItems={customItems} setCustomItems={setCustomItems} editItems={!isViewer&&editMode}/>
     </div>
   );
 }
 
 /* ══ HQ REQUESTS ════════════════════════════════════════════ */
-function HQRequests({requests,setRequests,proc,setProc,received,setReceived}){
+function HQRequests({requests,setRequests,proc,setProc,received,setReceived,isViewer}){
   const[filter,setFilter]=useState("All");
   const[purchaseForm,setPurchaseForm]=useState({}); // {reqId: {price,vendor,invoiceNo}}
   const statuses=["All","Pending","In Progress","Resolved"];
@@ -1775,7 +1778,7 @@ function HQRequests({requests,setRequests,proc,setProc,received,setReceived}){
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
                 <span className="req-badge" style={{background:uc.bg,color:uc.c,justifyContent:"center"}}>{r.status}</span>
-                <select value={r.status} onChange={e=>{
+                {!isViewer&&<select value={r.status} onChange={e=>{
                   const newStatus=e.target.value;
                   if(newStatus==="Resolved"&&r.type==="Item Needed"&&!alreadyLinked){
                     // Show purchase form instead of immediately resolving
@@ -1787,7 +1790,7 @@ function HQRequests({requests,setRequests,proc,setProc,received,setReceived}){
                   }
                 }} style={{border:"1px solid var(--line)",borderRadius:6,padding:"4px 7px",fontSize:".72rem",cursor:"pointer"}}>
                   <option>Pending</option><option>In Progress</option><option>Resolved</option>
-                </select>
+                </select>}
               </div>
             </div>
           </div>;
@@ -1873,7 +1876,7 @@ function PurchaseFormRow({f,upFn,onSave,onCancel,saveLabel="Save"}){
     </div>
   );
 }
-function HQPurchases({proc,setProc}){
+function HQPurchases({proc,setProc,isViewer}){
   const[propF,setPropF]=useState("All");
   const[showAdd,setShowAdd]=useState(false);
   const[search,setSearch]=useState("");
@@ -1900,8 +1903,8 @@ function HQPurchases({proc,setProc}){
         <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search item, vendor…" style={{padding:"6px 10px",border:"1.5px solid var(--line)",borderRadius:8,fontSize:".8rem",width:170,outline:"none"}}/>
           <button className="btn btn-dk btn-sm" onClick={dlProp}>⬇ Download</button>
-          {proc.length>0&&<button className="btn btn-sm" style={{background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FECACA"}} onClick={()=>{if(window.confirm("Clear ALL purchases? This cannot be undone."))setProc([]);}}>🗑 Clear all</button>}
-          <button className="btn btn-g btn-sm" onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm({purchaseDate:todayISO()});}}>+ New Order</button>
+          {!isViewer&&proc.length>0&&<button className="btn btn-sm" style={{background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FECACA"}} onClick={()=>{if(window.confirm("Clear ALL purchases? This cannot be undone."))setProc([]);}}>🗑 Clear all</button>}
+          {!isViewer&&<button className="btn btn-g btn-sm" onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm({purchaseDate:todayISO()});}}>+ New Order</button>}
         </div>
       </div>
       <div className="prop-tabs">{usedProps.map(p=><button key={p} className={"prop-tab"+(propF===p?" on":"")} onClick={()=>setPropF(p)}>{p}</button>)}</div>
@@ -1940,7 +1943,7 @@ function HQPurchases({proc,setProc}){
                     <td data-label="Cat.">{p.category?<span className="tag" style={{background:"#F3F4F6",color:"var(--ink2)"}}>{p.category}</span>:"—"}</td>
                     <td data-label="Warranty" style={{fontFamily:"var(--fm)",fontSize:".74rem"}}>{p.warranty||"—"}</td>
                     <td data-label="Invoice">{p.invoiceFile?<InvoiceFileCell rec={p.invoiceFile} onChange={()=>{}}/>:<span>{p.invoiceNo||"—"}</span>}</td>
-                    <td><div style={{display:"flex",gap:4}}><button className="btn-edit" onClick={()=>startEdit(p)}>✏ Edit</button><button className="btn-cancel" style={{background:"#FEE2E2",color:"#b91c1c",border:"none"}} onClick={()=>delRow(p.id)}>🗑 Del</button></div></td>
+                    {!isViewer&&<td><div style={{display:"flex",gap:4}}><button className="btn-edit" onClick={()=>startEdit(p)}>✏ Edit</button><button className="btn-cancel" style={{background:"#FEE2E2",color:"#b91c1c",border:"none"}} onClick={()=>delRow(p.id)}>🗑 Del</button></div></td>}
                   </tr>;
                 })}
               {filtered.length>0&&<tr className="total-row" style={{background:"var(--stone)"}}>
@@ -1956,7 +1959,7 @@ function HQPurchases({proc,setProc}){
 }
 
 /* ══ HQ EXPENSES ════════════════════════════════════════════ */
-function HQExpenses({exp,setExp}){
+function HQExpenses({exp,setExp,isViewer}){
   const[propF,setPropF]=useState("All");
   const[showAdd,setShowAdd]=useState(false);
   const[search,setSearch]=useState("");
@@ -1985,7 +1988,7 @@ function HQExpenses({exp,setExp}){
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search item, vendor…" style={{padding:"6px 10px",border:"1.5px solid var(--line)",borderRadius:8,fontSize:".8rem",width:170,outline:"none"}}/>
           <button className="btn btn-dk btn-sm" onClick={dlProp}>⬇ Download</button>
           {exp.length>0&&<button className="btn btn-sm" style={{background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FECACA"}} onClick={()=>{if(window.confirm("Clear ALL expenses? This cannot be undone."))setExp([]);}}>🗑 Clear all</button>}
-          <button className="btn btn-g btn-sm" onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm({date:todayISO()});}}>+ Add Expense</button>
+          {!isViewer&&<button className="btn btn-g btn-sm" onClick={()=>{setShowAdd(s=>!s);setEditId(null);setForm({date:todayISO()});}}>+ Add Expense</button>}
         </div>
       </div>
       <div className="prop-tabs">{usedProps.map(p=><button key={p} className={"prop-tab"+(propF===p?" on":"")} onClick={()=>setPropF(p)}>{p}</button>)}</div>
@@ -2056,7 +2059,7 @@ function HQExpenses({exp,setExp}){
                     <td data-label="Dept"><span className="tag" style={{background:"#EFF6FF",color:"#1D4ED8"}}>{e.department}</span></td>
                     <td data-label="Warranty" style={{fontFamily:"var(--fm)",fontSize:".74rem"}}>{e.warranty||"—"}</td>
                     <td data-label="Invoice">{e.invoiceFile?<InvoiceFileCell rec={e.invoiceFile} onChange={()=>{}}/>:<span>{e.invoiceNo||"—"}</span>}</td>
-                    <td><div style={{display:"flex",gap:4}}><button className="btn-edit" onClick={()=>startEdit(e)}>✏ Edit</button><button className="btn-cancel" style={{background:"#FEE2E2",color:"#b91c1c",border:"none"}} onClick={()=>delRow(e.id)}>🗑 Del</button></div></td>
+                    {!isViewer&&<td><div style={{display:"flex",gap:4}}><button className="btn-edit" onClick={()=>startEdit(e)}>✏ Edit</button><button className="btn-cancel" style={{background:"#FEE2E2",color:"#b91c1c",border:"none"}} onClick={()=>delRow(e.id)}>🗑 Del</button></div></td>}
                   </tr>;
                 })}
               <tr className="total-row" style={{background:"var(--stone)"}}>
