@@ -1299,9 +1299,25 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
   async function forceSyncToFirestore(){
     if(!window.db){setSyncMsg("No connection – try again when online.");return;}
     setSyncing(true);setSyncMsg(null);
-    const KEYS=["seclude_checks","seclude_requests","seclude_custom_items","seclude_proc_v2","seclude_received","seclude_office_items","seclude_exp"];
     let ok=0,fail=0;
-    for(const key of KEYS){
+    // For seclude_checks: too large to write whole doc — merge only this property's slice
+    try{
+      const raw=localStorage.getItem("seclude_checks");
+      if(raw){
+        const localData=JSON.parse(raw);
+        const propSlice=localData[session.propId];
+        if(propSlice){
+          const snap=await window.db.collection("ops").doc("seclude_checks").get();
+          const fsVal=snap.exists?snap.data().v:{};
+          fsVal[session.propId]=propSlice;
+          await window.db.collection("ops").doc("seclude_checks").set({v:fsVal,_ts:Date.now()});
+          ok++;
+        }
+      }
+    }catch(e){fail++;console.warn("[ForceSync] seclude_checks",e);}
+    // All other keys: safe to write in full
+    const OTHER_KEYS=["seclude_requests","seclude_custom_items","seclude_proc_v2","seclude_received","seclude_office_items","seclude_exp"];
+    for(const key of OTHER_KEYS){
       try{
         const raw=localStorage.getItem(key);
         if(!raw)continue;
@@ -1314,7 +1330,7 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
       }catch(e){fail++;console.warn("[ForceSync]",key,e);}
     }
     setSyncing(false);
-    setSyncMsg(fail===0?`✓ Synced ${ok} items to HQ!`:`Done – ${ok} synced, ${fail} failed. Try again.`);
+    setSyncMsg(fail===0?`✓ Synced successfully!`:`Done – ${ok} synced, ${fail} failed. Try again.`);
     setTimeout(()=>setSyncMsg(null),6000);
   }
   function prevMon(){if(mn===1){setYr(y=>y-1);setMn(12);}else setMn(m=>m-1);}
