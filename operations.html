@@ -1455,7 +1455,8 @@ function ReceivedLog({received,showProp=true}){
 
 /* ══ HQ APP ═════════════════════════════════════════════════ */
 function HQApp({session,onLogout,checks,setChecks,photos,setPhotos,requests,setRequests,customItems,setCustomItems,proc,setProc,received,setReceived}){
-  const isViewer=session.user.role==="Viewer";
+  const currentHQUser=HQ_USERS.find(u=>u.email===session.user?.email)||session.user;
+  const isViewer=currentHQUser?.role==="Viewer";
   const[page,setPage]=useState("dashboard");
   const[selProp,setSelProp]=useState(null);
   const[propArea,setPropArea]=useState("Room Inventory");
