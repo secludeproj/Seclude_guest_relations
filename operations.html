@@ -1284,7 +1284,9 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
         const raw=localStorage.getItem(key);if(!raw)continue;
         const localData=JSON.parse(raw);
         const snap=await window.db.collection("ops").doc(key).get();
-        const merged=snap.exists?{...snap.data().v,...localData}:localData;
+        // Arrays must not be spread into objects — local always wins for array keys
+        const fsVal=snap.exists?snap.data().v:null;
+        const merged=Array.isArray(localData)||!fsVal||Array.isArray(fsVal)?localData:{...fsVal,...localData};
         await window.db.collection("ops").doc(key).set({v:merged,_ts:Date.now()});
       }catch(e){console.warn("[AutoSync]",key,e);}
     }
@@ -1304,9 +1306,9 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
         const raw=localStorage.getItem(key);
         if(!raw)continue;
         const localData=JSON.parse(raw);
-        // Fetch current Firestore state, then merge local on top — never clobber other properties
         const snap=await window.db.collection("ops").doc(key).get();
-        const merged=snap.exists?{...snap.data().v,...localData}:localData;
+        const fsVal=snap.exists?snap.data().v:null;
+        const merged=Array.isArray(localData)||!fsVal||Array.isArray(fsVal)?localData:{...fsVal,...localData};
         await window.db.collection("ops").doc(key).set({v:merged,_ts:Date.now()});
         ok++;
       }catch(e){fail++;console.warn("[ForceSync]",key,e);}
