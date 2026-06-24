@@ -1332,10 +1332,10 @@ function PMPortal({session,onLogout,checks,setChecks,photos,setPhotos,requests,s
           </svg>
           <div style={{color:"rgba(255,255,255,.7)",fontSize:".8rem",flex:1,marginLeft:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.propName} · {session.submitter}</div>
           {window.db&&<span style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:"rgba(255,255,255,.5)",whiteSpace:"nowrap",flexShrink:0}}><span style={{width:"5px",height:"5px",borderRadius:"50%",background:"#34D399",display:"inline-block"}}/>Live</span>}
-          <button onClick={forceSyncToFirestore} disabled={syncing} style={{marginLeft:4,padding:"5px 10px",fontSize:".7rem",border:"1.5px solid rgba(255,255,255,.3)",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:syncing?"#0F5C4C":"transparent",whiteSpace:"nowrap",flexShrink:0}}>{syncing?"Syncing…":"⬆ Sync"}</button>
           <button className="pm-exit" style={{marginLeft:4}} onClick={onLogout}>✕ Exit</button>
         </div>
         <div className="pm-btn-row">
+          <button onClick={forceSyncToFirestore} disabled={syncing} style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid rgba(255,255,255,.4)",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:syncing?"#0F5C4C":"transparent"}}>{syncing?"Syncing…":"⬆ Sync to HQ"}</button>
           <button style={{padding:"6px 11px",fontSize:".74rem",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:"#1B7A5E"}} onClick={()=>setShowInvForm(true)}>📦 Inventory Received</button>
           <button style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid "+(showReceivedLog?"#1B7A5E":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:showReceivedLog?"#1B7A5E":"transparent"}} onClick={()=>setShowReceivedLog(s=>!s)}>📋 Received Log</button>
           <button onClick={()=>setEditItems(m=>!m)} style={{padding:"6px 11px",fontSize:".74rem",border:"1.5px solid "+(editItems?"#0F5C4C":"rgba(255,255,255,.3)"),borderRadius:7,cursor:"pointer",fontFamily:"var(--ff)",fontWeight:600,color:"#fff",background:editItems?"#0F5C4C":"transparent"}}>{editItems?"✓ Done":"✏️ Edit Items"}</button>
